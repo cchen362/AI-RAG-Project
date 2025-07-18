@@ -1,0 +1,13 @@
+
+This is a sample document for testing our RAG system.
+
+It contains multiple paragraphs to test text extraction and chunking.
+
+The document processor should extract this content cleanly and 
+prepare it for embedding and storage in our vector database.
+
+This helps us verify that our pipeline works correctly before 
+processing real documents.
+
+Keywords: RAG, testing, document processing, pipeline
+        

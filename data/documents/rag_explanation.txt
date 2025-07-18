@@ -1,0 +1,22 @@
+
+    # Retrieval-Augmented Generation (RAG)
+    
+    RAG combines information retrieval with text generation to create more accurate AI responses.
+    
+    ## How RAG Works:
+    
+    1. **Document Processing**: Break documents into chunks
+    2. **Embedding**: Convert text chunks into numerical vectors
+    3. **Storage**: Store vectors in a searchable database
+    4. **Retrieval**: Find relevant chunks for user queries
+    5. **Generation**: Use retrieved context to generate accurate responses
+    
+    ## Benefits of RAG:
+    - Reduces hallucinations
+    - Provides source citations
+    - Updates knowledge without retraining
+    - Cost-effective compared to fine-tuning
+    
+    ## RAG vs Fine-tuning:
+    RAG is better for dynamic knowledge, while fine-tuning is better for style adaptation.
+    

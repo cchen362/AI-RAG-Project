@@ -1,0 +1,22 @@
+
+    # Artificial Intelligence Overview
+    
+    Artificial Intelligence (AI) is the simulation of human intelligence in machines.
+    
+    ## Key Types of AI:
+    
+    1. **Narrow AI**: AI designed for specific tasks (like voice assistants)
+    2. **General AI**: AI with human-like cognitive abilities (still theoretical)
+    3. **Super AI**: AI that exceeds human intelligence (hypothetical)
+    
+    ## Machine Learning
+    Machine Learning is a subset of AI that enables computers to learn without explicit programming.
+    
+    ### Types of Machine Learning:
+    - Supervised Learning: Learning with labeled data
+    - Unsupervised Learning: Finding patterns in unlabeled data
+    - Reinforcement Learning: Learning through trial and error
+    
+    ## Applications
+    AI is used in healthcare, finance, transportation, and entertainment.
+    

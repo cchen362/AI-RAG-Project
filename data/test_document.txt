@@ -1,0 +1,27 @@
+# Test Document for RAG System
+
+## Introduction
+This is a simple test document to verify our RAG system is working correctly.
+
+## RAG Basics
+Retrieval-Augmented Generation (RAG) combines the power of information retrieval with text generation. Think of it like having a smart librarian who can:
+
+1. **Find relevant information** - Like a librarian who knows exactly which book contains the answer
+2. **Understand context** - Like understanding what you're really asking for  
+3. **Provide accurate answers** - Like giving you a summary with exact page references
+
+## Benefits
+- Reduces AI hallucinations by grounding responses in real documents
+- Provides source citations so you can verify information
+- Allows updating knowledge without retraining the entire model
+- More cost-effective than fine-tuning for many use cases
+
+## Implementation
+A typical RAG system works like this:
+1. Break documents into chunks (like creating index cards)
+2. Convert chunks to embeddings (like creating a meaning-based filing system)
+3. Store in vector database (like organizing the filing cabinet)
+4. Search for relevant chunks (like finding the right index cards)
+5. Generate response using found information (like writing a summary)
+
+This document should help test the basic functionality of our RAG system.
