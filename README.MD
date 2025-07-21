@@ -75,7 +75,7 @@ AI-RAG-Project/
 
 ### Document Sources
 1. **Sample Documents**: Use the provided documentation in the `docs/` folder
-2. **Upload Your Own**: Support for PDF, DOCX, TXT, CSV, XLSX files via the web interface
+2. **Upload Your Own**: Support for PDF, DOCX, TXT, CSV, XLSX files via the web interface **Remember to select "Process Documents"!**
 3. **Salesforce Integration**: Real-time search of Knowledge Articles (if configured)
 
 ### Example Questions
