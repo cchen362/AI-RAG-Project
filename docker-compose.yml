@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  ai-rag-app:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      # Optional - local embeddings work without API key
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # Optional - for Salesforce integration
+      - SALESFORCE_USERNAME=${SALESFORCE_USERNAME:-}
+      - SALESFORCE_PASSWORD=${SALESFORCE_PASSWORD:-}
+      - SALESFORCE_SECURITY_TOKEN=${SALESFORCE_SECURITY_TOKEN:-}
+      # Application configuration
+      - RAG_DATA_DIR=/app/data
+      - RAG_CACHE_DIR=/app/cache
+    volumes:
+      - ./data:/app/data
+      - ./cache:/app/cache
+    restart: unless-stopped

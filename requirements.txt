@@ -5,6 +5,7 @@ langchain-openai>=0.1.0
 
 # Vector Database - Your "smart filing cabinet"
 chromadb>=0.5.0
+faiss-cpu>=1.7.4
 # Alternative options (choose one):
 # pinecone-client>=3.0.0
 # weaviate-client>=4.0.0
@@ -12,6 +13,7 @@ chromadb>=0.5.0
 # AI Models and Embeddings - Your "smart assistants"
 openai>=1.30.0
 sentence-transformers>=3.0.0
+scikit-learn>=1.3.0
 
 # Document Processing - Your "prep tools"
 pypdf>=4.0.0
