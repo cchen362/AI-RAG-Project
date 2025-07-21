@@ -1,4 +1,4 @@
-# AI RAG Project - Collaborative Version
+# AI RAG Project - AI Knowledge Assignment
 
 A smart document assistant that combines **Retrieval-Augmented Generation (RAG)** with Salesforce integration to provide intelligent document search and question-answering capabilities.
 
