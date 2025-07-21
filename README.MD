@@ -1,4 +1,4 @@
-"# AI RAG Project - Enhanced Version" 
+"# Personal AI RAG Assistant" 
 
 This is my AI-powered Retrieval-Augmented Generation (RAG) system.
 
