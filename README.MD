@@ -9,3 +9,5 @@ This is my AI-powered Retrieval-Augmented Generation (RAG) system.
 
 ## Getting Started
 Run `python launch_app.py` to start the application.
+
+Another test line for staging practice.
