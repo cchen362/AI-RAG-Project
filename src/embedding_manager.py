@@ -6,15 +6,7 @@ from datetime import datetime
 import pickle
 import hashlib
 
-# OpenAI for embeddings
-from openai import OpenAI
-
-# Alternative: Local embeddings
-from sentence_transformers import SentenceTransformer
-
-# Vector Operations
-from sklearn.metrics.pairwise import cosine_similarity
-import faiss
+# Heavy imports moved to methods for faster startup
 
 class EmbeddingManager:
     """
@@ -78,6 +70,9 @@ class EmbeddingManager:
         """Initialize the embedding model based on configuration."""
 
         if self.embedding_model == "openai":
+            # Lazy import OpenAI
+            from openai import OpenAI
+            
             # Initialize OpenAI client
             api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:
@@ -88,6 +83,9 @@ class EmbeddingManager:
             self.logger.info(f"✅ Initialized OpenAI embeddings with model: {self.model_name}")
 
         elif self.embedding_model == "local":
+            # Lazy import SentenceTransformer
+            from sentence_transformers import SentenceTransformer
+            
             # Initialize local sentence transformer with proper model name
             self.model = SentenceTransformer(self.model_name)
             self.embedding_dimension = self.model.get_sentence_embedding_dimension()
@@ -264,6 +262,8 @@ class EmbeddingManager:
         Like measuring how similar two people's fingerprints are - 
         returns a score from 0 (completely different) to 1 (identical).
         """
+        # Lazy import sklearn
+        from sklearn.metrics.pairwise import cosine_similarity
 
         # Handle zero vectors
         if np.all(embedding1 == 0) or np.all(embedding2 == 0):
@@ -339,6 +339,8 @@ class VectorDatabase:
             dimension: Embedding dimension
             index_type: "flat" (exact search) or "ivf" (approximate, faster)
         """
+        # Lazy import faiss
+        import faiss
         
         self.dimension = dimension
         self.index_type = index_type
@@ -366,6 +368,8 @@ class VectorDatabase:
         
         Like adding new books to your library with their catalog information.
         """
+        # Lazy import faiss
+        import faiss
         
         if len(embeddings) != len(metadata):
             raise ValueError("Number of embeddings must match number of metadata entries")
@@ -403,6 +407,8 @@ class VectorDatabase:
         
         Like asking a librarian to find books similar to one you're holding.
         """
+        # Lazy import faiss
+        import faiss
         
         if self.index.ntotal == 0:
             return []
@@ -456,6 +462,8 @@ class VectorDatabase:
         
         Like emptying your entire filing cabinet and starting fresh.
         """
+        # Lazy import faiss
+        import faiss
         
         # Reinitialize the FAISS index
         if self.index_type == "flat":
@@ -473,6 +481,8 @@ class VectorDatabase:
 
     def save_to_disk(self, filepath: str):
         """Save database to disk."""
+        # Lazy import faiss
+        import faiss
         
         # Save FAISS index
         faiss.write_index(self.index, f"{filepath}.index")
@@ -491,6 +501,8 @@ class VectorDatabase:
     
     def load_from_disk(self, filepath: str):
         """Load database from disk."""
+        # Lazy import faiss
+        import faiss
         
         # Load FAISS index
         self.index = faiss.read_index(f"{filepath}.index")

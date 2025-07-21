@@ -41,9 +41,17 @@ A smart document assistant that combines **Retrieval-Augmented Generation (RAG)*
    ```
 
 4. **Launch the application**
+   
+   **Option A: Direct Python (Development)**
    ```bash
    python launch_app.py
    ```
+   
+   **Option B: Docker (Recommended for Production)**
+   ```bash
+   docker-compose up -d
+   ```
+   
    Access at: http://localhost:8501
 
 ## 📁 Project Structure
@@ -94,14 +102,41 @@ AI-RAG-Project/
 
 The system automatically detects query intent and selects the appropriate search method. You can also force specific search strategies in the advanced options.
 
+## 🐳 Docker Deployment
+
+### Quick Start with Docker
+```bash
+# Using Docker Compose (recommended)
+docker-compose up -d
+
+# Or build manually
+docker build -t rag-app .
+docker run -p 8501:8501 rag-app
+```
+
+### Environment Setup
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+2. Edit `.env` with your API keys (optional - app works with local embeddings)
+
+### Docker Features
+- ✅ **Fast startup** - Optimized imports for quick loading
+- ✅ **No API keys required** - Works with local embeddings by default
+- ✅ **Data persistence** - Volumes for cache and documents
+- ✅ **Production ready** - Includes restart policies
+
+For detailed Docker instructions, see [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)
+
 ## 📊 Current Status
 
 - ✅ Basic RAG system implemented
 - ✅ Streamlit and Gradio interfaces
 - ✅ Salesforce integration with intent recognition
 - ✅ Transformative semantic search
-- 🚧 Docker containerization (in progress)
-- 📋 Documentation improvements planned
+- ✅ Docker containerization completed
+- ✅ Production deployment ready
 
 ## 🤝 Contributing
 
@@ -120,4 +155,4 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Built with**: Custom RAG Pipeline, OpenAI/Sentence-Transformers, Salesforce API, Streamlit, FAISS
+**Built with**: Custom RAG Pipeline, OpenAI/Sentence-Transformers, Salesforce API, Streamlit, FAISS, Docker
