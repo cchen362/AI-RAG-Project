@@ -19,3 +19,9 @@ Another test line for staging practice.
 
 ## Contributing
 Please create a feature branch for any new features or improvements.
+
+## Project Status
+- ✅ Basic RAG system implemented
+- ✅ Gradio and Streamlit interfaces
+- 🚧 Automated testing (in progress)
+- 📋 Documentation improvements planned
