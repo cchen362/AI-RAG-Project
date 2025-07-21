@@ -22,7 +22,7 @@ A smart document assistant that combines **Retrieval-Augmented Generation (RAG)*
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/cchen362/AI-RAG-Project
    cd AI-RAG-Project
    ```
 
