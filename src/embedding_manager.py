@@ -10,11 +10,7 @@ import hashlib
 try:
     from visual_document_processor import VisualDocumentProcessor
 except ImportError:
-    # Fallback for different import contexts
-    try:
-        from .visual_document_processor import VisualDocumentProcessor
-    except ImportError:
-        VisualDocumentProcessor = None
+    VisualDocumentProcessor = None
 
 class EmbeddingManager:
     """
@@ -207,16 +203,26 @@ class EmbeddingManager:
         and associated metadata for multi-vector search.
         """
         if self.embedding_model != "colpali":
-            raise ValueError("Visual embeddings are only supported with ColPali model")
+            return {
+                'status': 'error',
+                'error': 'Visual embeddings are only supported with ColPali model'
+            }
         
         if not file_path or not os.path.exists(file_path):
-            raise ValueError(f"Invalid file path: {file_path}")
+            return {
+                'status': 'error',
+                'error': f'Invalid file path: {file_path}'
+            }
         
         # Generate cache key if not provided
         if cache_key is None:
-            with open(file_path, 'rb') as f:
-                file_content = f.read()
-                cache_key = hashlib.md5(file_content).hexdigest()
+            try:
+                with open(file_path, 'rb') as f:
+                    file_content = f.read()
+                    cache_key = hashlib.md5(file_content).hexdigest()
+            except Exception as e:
+                self.logger.error(f"Failed to generate cache key: {e}")
+                cache_key = hashlib.md5(file_path.encode()).hexdigest()
         
         # Check cache first
         if self.cache_embeddings:
@@ -227,14 +233,24 @@ class EmbeddingManager:
         
         try:
             # Process document with visual processor
+            if self.visual_processor is None:
+                return {
+                    'status': 'error',
+                    'error': 'VisualDocumentProcessor not initialized'
+                }
+            
             result = self.visual_processor.process_file(file_path)
             
             if result['status'] == 'error':
-                raise Exception(result['error'])
+                self.logger.error(f"Visual processor error: {result['error']}")
+                return result
             
             # Cache the result
             if self.cache_embeddings:
-                self._save_visual_to_cache(cache_key, result)
+                try:
+                    self._save_visual_to_cache(cache_key, result)
+                except Exception as e:
+                    self.logger.warning(f"Failed to cache visual embedding: {e}")
             
             # Update statistics
             self.stats['embeddings_created'] += 1
@@ -245,19 +261,32 @@ class EmbeddingManager:
             
         except Exception as e:
             self.logger.error(f"Failed to create visual embedding for {file_path}: {str(e)}")
-            raise
+            return {
+                'status': 'error',
+                'error': str(e),
+                'file_path': file_path
+            }
 
     def query_visual_embeddings(self, query: str, document_embeddings: Any) -> Any:
         """Query visual embeddings using ColPali."""
         if self.embedding_model != "colpali":
-            raise ValueError("Visual querying is only supported with ColPali model")
+            self.logger.error("Visual querying is only supported with ColPali model")
+            import torch
+            return torch.tensor([0.0])
         
         try:
+            if self.visual_processor is None:
+                self.logger.error("VisualDocumentProcessor not initialized for querying")
+                import torch
+                return torch.tensor([0.0])
+            
             scores = self.visual_processor.query_embeddings(query, document_embeddings)
             return scores
         except Exception as e:
             self.logger.error(f"Failed to query visual embeddings: {str(e)}")
-            raise
+            # Return a default score instead of raising
+            import torch
+            return torch.tensor([0.0])
 
     def create_batch_embeddings(self, texts: List[str], batch_size: int = 10) -> List[np.ndarray]:
         """

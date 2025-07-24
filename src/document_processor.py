@@ -62,6 +62,7 @@ class DocumentProcessor:
                 'metadata': metadata,
                 'processing_time': processing_time,
                 'status': 'success',
+                'success': True,  # Add this for RAG system compatibility
                 'error': None
             }
 
@@ -79,6 +80,7 @@ class DocumentProcessor:
                 'file_path': file_path,
                 'content': None,
                 'status': 'error',
+                'success': False,  # Add this for RAG system compatibility
                 'error': str(e),
                 'processing_time': (datetime.now() - start_time).total_seconds()
             }

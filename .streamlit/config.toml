@@ -1,14 +1,47 @@
 [server]
-maxUploadSize = 200
-maxMessageSize = 200
-enableCORS = false
-enableXsrfProtection = false
+# File upload settings to prevent AxiosError 400
+maxUploadSize = 200  # 200MB max upload size
+maxMessageSize = 200  # 200MB max message size
+
+# Security settings (relaxed to prevent upload conflicts)
+enableCORS = false  # Disable CORS to prevent upload interference
+enableXsrfProtection = false  # Disable XSRF protection for upload stability
+
+# Performance settings to prevent interruptions
+fileWatcherType = "none"  # Reduce file system monitoring overhead
+runOnSave = false  # Prevent automatic reruns during file operations
+
+# Connection settings
+headless = false
+port = 8501
+address = "localhost"
+
+# Prevent timeout issues during uploads
+connectionTimeout = 60  # 60 second timeout for connections
+keepAliveTimeout = 10  # 10 second keep-alive
 
 [browser]
-gatherUsageStats = false
+# Browser settings to reduce overhead
+gatherUsageStats = false  # Disable usage stats to reduce overhead
+serverAddress = "localhost"  # Explicit server address
+
+[client]
+# UI settings to reduce conflicts during uploads
+toolbarMode = "minimal"  # Minimal toolbar to reduce UI conflicts
+showErrorDetails = true  # Show detailed errors for debugging
+caching = true  # Enable caching for better performance
+
+[runner]
+# Script execution settings
+magicEnabled = true  # Enable magic commands
+fastReruns = false  # Disable fast reruns to prevent upload interruption
+enforceSerializableSessionState = false  # Allow flexible session state
+
+[logger]
+# Logging settings for debugging upload issues
+level = "info"
+messageFormat = "%(asctime)s %(levelname)s %(message)s"
 
 [theme]
+# Theme settings
 base = "light"
-
-[global]
-suppressDeprecationWarnings = true
