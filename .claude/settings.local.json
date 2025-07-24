@@ -8,7 +8,9 @@
       "Bash(python:*)",
       "Bash(rm:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(rag_env\\Scripts\\activate)"
+      "Bash(rag_env\\Scripts\\activate)",
+      "Bash(grep:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }

@@ -883,13 +883,8 @@ def clear_all_data():
         st.session_state.query_input_key = 0
         st.session_state.show_clear_confirmation = False
         
-        # Clear the cached systems - FORCE CLEAR
-        try:
-            initialize_rag_system.clear()
-            initialize_enhanced_colpali.clear()
-            print("✅ System cache cleared")
-        except Exception as e:
-            print(f"⚠️ Cache clear warning: {str(e)}")
+        # Session state cleared - cached functions no longer exist
+        print("✅ Session state cleared")
         
         print("🗑️ All data cleared successfully!")
         return True
@@ -1006,7 +1001,9 @@ def main():
                 # Clear the input field by incrementing the key
                 st.session_state.query_input_key += 1
                 
-                # Note: Removed st.rerun() to prevent interference with file uploads
+                # Safe rerun only for query (avoid during file uploads)
+                if not st.session_state.get('file_upload_in_progress', False):
+                    st.rerun()
         
         # Display recent results
         if st.session_state.chat_history:
@@ -1117,6 +1114,9 @@ def main():
             )
             
             if process_docs:
+                # Set flag to prevent query rerun during file upload
+                st.session_state.file_upload_in_progress = True
+                
                 # Auto-initialize systems if needed
                 if not st.session_state.orchestrator.ensure_initialized():
                     st.stop()  # Stop execution if initialization failed
@@ -1233,6 +1233,8 @@ def main():
                     except Exception as e:
                         st.error(f"❌ Document processing failed: {e}")
                     finally:
+                        # Clear file upload flag
+                        st.session_state.file_upload_in_progress = False
                         # Clean up temporary files
                         for temp_path in temp_paths:
                             try:
