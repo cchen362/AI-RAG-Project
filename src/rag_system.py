@@ -29,18 +29,24 @@ current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
 # Import all your RAG components that you've built
-# We'll use absolute imports to avoid the relative import issue
+# Use absolute imports to avoid relative import issues
 try:
-    from document_processor import DocumentProcessor
-    from text_chunker import TextChunker
-    from embedding_manager import EmbeddingManager, MultiModalVectorDatabase
+    from src.document_processor import DocumentProcessor
+    from src.text_chunker import TextChunker
+    from src.embedding_manager import EmbeddingManager, MultiModalVectorDatabase
 except ImportError as e:
-    print(f"❌ Import error: {e}")
-    print("Make sure all component files exist in the src folder:")
-    print("  - document_processor.py") 
-    print("  - text_chunker.py")
-    print("  - embedding_manager.py")
-    sys.exit(1)
+    # Fallback to current directory imports for compatibility
+    try:
+        from document_processor import DocumentProcessor
+        from text_chunker import TextChunker
+        from embedding_manager import EmbeddingManager, MultiModalVectorDatabase
+    except ImportError as e2:
+        print(f"❌ Import error: {e2}")
+        print("Make sure all component files exist in the src folder:")
+        print("  - document_processor.py") 
+        print("  - text_chunker.py")
+        print("  - embedding_manager.py")
+        sys.exit(1)
 
 # Set up logging to track what's happening
 logging.basicConfig(level=logging.INFO)

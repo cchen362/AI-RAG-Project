@@ -141,13 +141,12 @@ class DocumentProcessor:
 
             # Fallback to pypdf
             try:
-                with open(file_path, 'rb') as file:
-                    pdf_reader = pypdf.PdfReader(file)
+                pdf_reader = pypdf.PdfReader(file_path)
 
-                    for page_num, page in enumerate(pdf_reader.pages):
-                        page_text = page.extract_text()
-                        content += f"\n--- Page {page_num + 1} ---\n{page_text}\n"
-                        self.stats['total_pages'] += 1
+                for page_num, page in enumerate(pdf_reader.pages):
+                    page_text = page.extract_text()
+                    content += f"\n--- Page {page_num + 1} ---\n{page_text}\n"
+                    self.stats['total_pages'] += 1
 
             except Exception as e2:
                 raise Exception(f"Both PDF extraction methods failed: {e2}")

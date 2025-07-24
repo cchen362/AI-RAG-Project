@@ -64,29 +64,41 @@ class VisualDocumentProcessor:
             logger.info(f"📥 Loading ColPali model: {self.model_name}")
             start_time = time.time()
             
-            # Import ColPali components with better compatibility
+            # Import ColPali components with 2025 API compatibility
+            from transformers.utils.import_utils import is_flash_attn_2_available
+            
             try:
-                from colpali_engine.models import ColPali, ColPaliProcessor
-                logger.info("✅ Using colpali_engine models")
+                from colpali_engine.models import ColQwen2, ColQwen2Processor
+                logger.info("✅ Using colpali_engine ColQwen2 models")
                 use_colpali_engine = True
             except ImportError:
                 logger.warning("⚠️ colpali_engine not available, trying transformers")
                 use_colpali_engine = False
             
             if use_colpali_engine:
-                # Try ColPali engine first
+                # Try ColPali engine first (latest API)
                 try:
-                    self.model = ColPali.from_pretrained(
+                    # Determine optimal settings
+                    torch_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
+                    attn_implementation = "flash_attention_2" if (self.device == "cuda" and is_flash_attn_2_available()) else None
+                    
+                    logger.info(f"🔧 Loading with dtype: {torch_dtype}, attention: {attn_implementation}")
+                    
+                    self.model = ColQwen2.from_pretrained(
                         self.model_name,
-                        torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
+                        torch_dtype=torch_dtype,
                         device_map=self.device,
-                        trust_remote_code=True
+                        trust_remote_code=True,
+                        attn_implementation=attn_implementation
                     ).eval()
                     
-                    self.processor = ColPaliProcessor.from_pretrained(
+                    self.processor = ColQwen2Processor.from_pretrained(
                         self.model_name,
                         trust_remote_code=True
                     )
+                    
+                    logger.info("✅ ColQwen2 models loaded successfully")
+                    
                 except Exception as engine_error:
                     logger.warning(f"⚠️ ColPali engine failed: {engine_error}")
                     use_colpali_engine = False
@@ -96,11 +108,15 @@ class VisualDocumentProcessor:
                 logger.info("🔄 Using transformers fallback")
                 from transformers import AutoModel, AutoProcessor
                 
+                torch_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
+                attn_implementation = "flash_attention_2" if (self.device == "cuda" and is_flash_attn_2_available()) else None
+                
                 self.model = AutoModel.from_pretrained(
                     self.model_name,
-                    torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
+                    torch_dtype=torch_dtype,
                     device_map=self.device,
-                    trust_remote_code=True
+                    trust_remote_code=True,
+                    attn_implementation=attn_implementation
                 ).eval()
                 
                 self.processor = AutoProcessor.from_pretrained(
@@ -236,26 +252,37 @@ class VisualDocumentProcessor:
     def _get_poppler_paths(self) -> List[Optional[str]]:
         """Get possible poppler installation paths."""
         paths = [
-            None,  # System PATH first
+            None,  # System PATH first (conda should add poppler to PATH)
+        ]
+        
+        # Add conda environment paths (miniconda/anaconda)
+        username = os.getenv('USERNAME', '')
+        if username:
+            paths.extend([
+                rf"C:\Users\{username}\miniconda3\Library\bin",
+                rf"C:\Users\{username}\anaconda3\Library\bin",
+                rf"C:\Users\{username}\Miniconda3\Library\bin",
+                rf"C:\Users\{username}\Anaconda3\Library\bin"
+            ])
+        
+        # Add environment variable path
+        if 'POPPLER_PATH' in os.environ:
+            paths.insert(1, os.environ['POPPLER_PATH'])
+        
+        # Add conda environment variable paths
+        if 'CONDA_PREFIX' in os.environ:
+            conda_prefix = os.environ['CONDA_PREFIX']
+            paths.insert(1, os.path.join(conda_prefix, 'Library', 'bin'))
+        
+        # Fallback manual installation paths
+        paths.extend([
             r"C:\Program Files\poppler\poppler-24.08.0\Library\bin",
             r"C:\Program Files\poppler\Library\bin",
             r"C:\Program Files\poppler\bin",
             r"C:\Program Files (x86)\poppler\bin",
             r"C:\poppler\bin",
             r"C:\tools\poppler\bin"
-        ]
-        
-        # Add conda environment paths
-        username = os.getenv('USERNAME', '')
-        if username:
-            paths.extend([
-                rf"C:\Users\{username}\miniconda3\Library\bin",
-                rf"C:\Users\{username}\anaconda3\Library\bin"
-            ])
-        
-        # Add environment variable path
-        if 'POPPLER_PATH' in os.environ:
-            paths.insert(1, os.environ['POPPLER_PATH'])
+        ])
         
         return paths
     
@@ -268,43 +295,45 @@ class VisualDocumentProcessor:
                 # Convert PIL image to the format expected by ColPali
                 batch_images.append(img)
             
-            # Process images through ColPali with better error handling
+            # Process images through ColPali with updated API handling
             with torch.no_grad():
                 try:
-                    # Try colpali-engine approach first
-                    if hasattr(self.processor, 'process_images'):
-                        batch_inputs = self.processor.process_images(batch_images)
-                    else:
-                        # Fallback to standard processor approach
-                        batch_inputs = self.processor(images=batch_images, return_tensors="pt")
+                    # Use updated ColQwen2 processor API
+                    batch_inputs = self.processor(images=batch_images, return_tensors="pt")
                     
                     # Move to device
                     for key in batch_inputs:
                         if isinstance(batch_inputs[key], torch.Tensor):
                             batch_inputs[key] = batch_inputs[key].to(self.device)
                     
-                    # Generate embeddings with model-specific handling
-                    embeddings = self.model(**batch_inputs)
-                    
-                    # Handle different output formats
-                    if hasattr(embeddings, 'last_hidden_state'):
-                        embeddings = embeddings.last_hidden_state
-                    elif isinstance(embeddings, tuple):
-                        embeddings = embeddings[0]
-                    
-                except AttributeError as attr_err:
-                    logger.warning(f"⚠️ Model attribute error: {attr_err}, trying alternative approach")
-                    # Alternative processing approach
-                    batch_inputs = self.processor(batch_images, return_tensors="pt")
-                    for key in batch_inputs:
-                        if isinstance(batch_inputs[key], torch.Tensor):
-                            batch_inputs[key] = batch_inputs[key].to(self.device)
-                    
+                    # Generate embeddings with ColQwen2 model
                     outputs = self.model(**batch_inputs)
+                    
+                    # Handle ColQwen2 output format
                     if hasattr(outputs, 'last_hidden_state'):
                         embeddings = outputs.last_hidden_state
+                    elif isinstance(outputs, tuple):
+                        embeddings = outputs[0]
                     else:
                         embeddings = outputs
+                    
+                except Exception as proc_err:
+                    logger.warning(f"⚠️ Standard processing failed: {proc_err}, trying alternative")
+                    # Alternative processing approach
+                    try:
+                        batch_inputs = self.processor(batch_images, return_tensors="pt")
+                        for key in batch_inputs:
+                            if isinstance(batch_inputs[key], torch.Tensor):
+                                batch_inputs[key] = batch_inputs[key].to(self.device)
+                        
+                        outputs = self.model(**batch_inputs)
+                        if hasattr(outputs, 'last_hidden_state'):
+                            embeddings = outputs.last_hidden_state
+                        else:
+                            embeddings = outputs
+                    except Exception as alt_err:
+                        logger.error(f"❌ Alternative processing also failed: {alt_err}")
+                        raise
             
             # Return embeddings tensor
             return embeddings
@@ -330,25 +359,21 @@ class VisualDocumentProcessor:
         try:
             self._load_model()
             
-            # Process query text with better error handling
+            # Process query text with ColQwen2 API
             with torch.no_grad():
                 try:
-                    # Try colpali-engine approach first
-                    if hasattr(self.processor, 'process_queries'):
-                        query_inputs = self.processor.process_queries([query])
-                    else:
-                        # Fallback to standard processor approach
-                        query_inputs = self.processor(text=[query], return_tensors="pt")
+                    # Use standard text processing for queries
+                    query_inputs = self.processor(text=[query], return_tensors="pt")
                     
                     # Move to device
                     for key in query_inputs:
                         if isinstance(query_inputs[key], torch.Tensor):
                             query_inputs[key] = query_inputs[key].to(self.device)
                     
-                    # Generate query embedding with model-specific handling
+                    # Generate query embedding
                     query_outputs = self.model(**query_inputs)
                     
-                    # Handle different output formats
+                    # Handle ColQwen2 output format
                     if hasattr(query_outputs, 'last_hidden_state'):
                         query_embedding = query_outputs.last_hidden_state
                     elif isinstance(query_outputs, tuple):
@@ -356,19 +381,23 @@ class VisualDocumentProcessor:
                     else:
                         query_embedding = query_outputs
                         
-                except AttributeError as attr_err:
-                    logger.warning(f"⚠️ Query processing error: {attr_err}, using fallback")
-                    # Simple text encoding fallback
-                    query_inputs = self.processor(query, return_tensors="pt")
-                    for key in query_inputs:
-                        if isinstance(query_inputs[key], torch.Tensor):
-                            query_inputs[key] = query_inputs[key].to(self.device)
-                    
-                    query_outputs = self.model(**query_inputs)
-                    if hasattr(query_outputs, 'last_hidden_state'):
-                        query_embedding = query_outputs.last_hidden_state
-                    else:
-                        query_embedding = query_outputs
+                except Exception as query_err:
+                    logger.warning(f"⚠️ Query processing error: {query_err}, using fallback")
+                    # Fallback query processing
+                    try:
+                        query_inputs = self.processor(query, return_tensors="pt")
+                        for key in query_inputs:
+                            if isinstance(query_inputs[key], torch.Tensor):
+                                query_inputs[key] = query_inputs[key].to(self.device)
+                        
+                        query_outputs = self.model(**query_inputs)
+                        if hasattr(query_outputs, 'last_hidden_state'):
+                            query_embedding = query_outputs.last_hidden_state
+                        else:
+                            query_embedding = query_outputs
+                    except Exception as fallback_err:
+                        logger.error(f"❌ Fallback query processing failed: {fallback_err}")
+                        raise
                 
                 # Move document embeddings to same device
                 if isinstance(document_embeddings, torch.Tensor):
