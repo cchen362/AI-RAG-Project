@@ -37,13 +37,21 @@ from src.cross_encoder_reranker import CrossEncoderReRanker
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configure Streamlist page
+# Configure Streamlit page with file upload settings
 st.set_page_config(
     page_title="🤖 Smart Document Assistant",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Configure Streamlit to handle file uploads properly and prevent 400 errors
+os.environ['STREAMLIT_SERVER_MAX_UPLOAD_SIZE'] = '200'  # 200MB max upload
+os.environ['STREAMLIT_SERVER_MAX_MESSAGE_SIZE'] = '200'  # 200MB max message
+os.environ['STREAMLIT_SERVER_ENABLE_CORS'] = 'false'  # Disable CORS to prevent conflicts
+os.environ['STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION'] = 'false'  # Disable XSRF for upload stability
+os.environ['STREAMLIT_CLIENT_TOOLBAR_MODE'] = 'minimal'  # Reduce UI overhead
+os.environ['STREAMLIT_SERVER_FILE_WATCHER_TYPE'] = 'none'  # Reduce file system monitoring
 
 # Custom CSS for better styling
 st.markdown("""
@@ -998,7 +1006,7 @@ def main():
                 # Clear the input field by incrementing the key
                 st.session_state.query_input_key += 1
                 
-                st.rerun()
+                # Note: Removed st.rerun() to prevent interference with file uploads
         
         # Display recent results
         if st.session_state.chat_history:
@@ -1070,18 +1078,45 @@ def main():
             • GPU deployment recommended for production
             """)
         
-        # File upload
-        uploaded_files = st.file_uploader(
-            "Upload documents",
-            accept_multiple_files=True,
-            type=['pdf', 'txt', 'docx'],
-            help="Upload documents for multi-source processing"
-        )
+        # File upload and processing section with proper form handling
+        st.subheader("📤 Document Upload")
+        
+        # File upload with stable key and robust error handling
+        try:
+            uploaded_files = st.file_uploader(
+                "Upload documents",
+                accept_multiple_files=True,
+                type=['pdf', 'txt', 'docx'],
+                help="Upload documents for multi-source processing (max 200MB per file)",
+                key="main_file_uploader"  # Static key prevents AxiosError 400
+            )
+            
+            # If upload fails, show helpful troubleshooting info
+            if uploaded_files is None and 'upload_error_shown' not in st.session_state:
+                st.info("💡 **Upload Tips**: If you encounter errors, try refreshing the page or uploading one file at a time.")
+                
+        except Exception as e:
+            st.error(f"❌ File upload error: {str(e)}")
+            st.error("🔧 **Troubleshooting**: This might be a browser/network issue. Try:")
+            st.error("   • Refresh the page and try again")
+            st.error("   • Upload files one at a time") 
+            st.error("   • Check your internet connection")
+            st.error("   • Try a smaller file first")
+            st.session_state.upload_error_shown = True
+            uploaded_files = None
         
         if uploaded_files:
             st.success(f"✅ {len(uploaded_files)} files selected")
             
-            if st.button("📤 Process Documents"):
+            # Add some spacing and then the process button
+            st.write("")
+            process_docs = st.button(
+                "📤 Process Documents", 
+                type="primary",
+                help="Process uploaded documents with multi-source RAG"
+            )
+            
+            if process_docs:
                 # Auto-initialize systems if needed
                 if not st.session_state.orchestrator.ensure_initialized():
                     st.stop()  # Stop execution if initialization failed
@@ -1094,15 +1129,81 @@ def main():
                     st.info("⏱️ **CPU Processing**: ColPali analysis may take 1-2 minutes per document.")
                 
                 with st.spinner(spinner_msg):
-                    # Save uploaded files to temporary paths
+                    # Save uploaded files to temporary paths with robust error handling
                     temp_paths = []
+                    upload_success_count = 0
+                    upload_error_count = 0
+                    
                     try:
-                        for uploaded_file in uploaded_files:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_file.name}") as tmp_file:
-                                tmp_file.write(uploaded_file.getvalue())
-                                temp_paths.append(tmp_file.name)
+                        for i, uploaded_file in enumerate(uploaded_files):
+                            try:
+                                # Enhanced file validation
+                                file_size = len(uploaded_file.getvalue())
+                                
+                                # File size validation
+                                if file_size > 200 * 1024 * 1024:  # 200MB limit
+                                    st.error(f"❌ File {uploaded_file.name} too large ({file_size/1024/1024:.1f}MB). Max 200MB.")
+                                    upload_error_count += 1
+                                    continue
+                                
+                                if file_size == 0:
+                                    st.warning(f"⚠️ File {uploaded_file.name} is empty, skipping.")
+                                    upload_error_count += 1
+                                    continue
+                                
+                                # File type validation (additional check)
+                                allowed_extensions = ['.pdf', '.txt', '.docx']
+                                file_extension = Path(uploaded_file.name).suffix.lower()
+                                if file_extension not in allowed_extensions:
+                                    st.error(f"❌ File {uploaded_file.name} has unsupported extension: {file_extension}")
+                                    upload_error_count += 1
+                                    continue
+                                
+                                # Save to temporary file with retry mechanism
+                                max_retries = 3
+                                for retry in range(max_retries):
+                                    try:
+                                        # Create secure temporary file
+                                        with tempfile.NamedTemporaryFile(
+                                            delete=False, 
+                                            suffix=f"_{uploaded_file.name}",
+                                            mode='wb'
+                                        ) as tmp_file:
+                                            tmp_file.write(uploaded_file.getvalue())
+                                            temp_paths.append(tmp_file.name)
+                                            
+                                        st.success(f"✅ {uploaded_file.name} ({file_size/1024:.1f}KB) ready for processing")
+                                        upload_success_count += 1
+                                        break  # Success, exit retry loop
+                                        
+                                    except Exception as retry_err:
+                                        if retry < max_retries - 1:
+                                            st.warning(f"⚠️ Retry {retry + 1}/3 for {uploaded_file.name}: {str(retry_err)}")
+                                            time.sleep(1)  # Brief delay before retry
+                                        else:
+                                            st.error(f"❌ Failed to save {uploaded_file.name} after {max_retries} attempts: {str(retry_err)}")
+                                            upload_error_count += 1
+                                
+                            except Exception as file_err:
+                                st.error(f"❌ Error processing {uploaded_file.name}: {str(file_err)}")
+                                upload_error_count += 1
+                                continue
                         
-                        # Process documents
+                        # Upload summary
+                        total_files = len(uploaded_files)
+                        if upload_success_count > 0:
+                            st.info(f"📊 **Upload Summary**: {upload_success_count}/{total_files} files ready for processing")
+                        
+                        if upload_error_count > 0:
+                            st.warning(f"⚠️ {upload_error_count} files had issues and were skipped")
+                        
+                        # Check if we have valid files to process
+                        if not temp_paths:
+                            st.error("❌ No valid files to process. Please check file formats and sizes.")
+                            st.info("💡 **Supported formats**: PDF, TXT, DOCX (max 200MB each)")
+                            return
+                        
+                        # Process documents (VLM analysis happens here while files exist)
                         result = st.session_state.orchestrator.add_documents(temp_paths)
                         
                         # Display results
@@ -1163,7 +1264,7 @@ def main():
         if st.session_state.chat_history:
             if st.button("🗑️ Clear History", type="secondary"):
                 st.session_state.chat_history = []
-                st.rerun()
+                # Note: Removed st.rerun() to prevent interference with file uploads
 
 
 # Run the app

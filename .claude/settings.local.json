@@ -6,7 +6,9 @@
       "Bash(find:*)",
       "Bash(pip install:*)",
       "Bash(python:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(rag_env\\Scripts\\activate)"
     ],
     "deny": []
   }

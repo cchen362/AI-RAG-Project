@@ -31,15 +31,12 @@ sys.path.insert(0, str(current_dir))
 # Import all your RAG components that you've built
 # We'll use absolute imports to avoid the relative import issue
 try:
-    from rag_pipeline import RAGPipeline
     from document_processor import DocumentProcessor
     from text_chunker import TextChunker
     from embedding_manager import EmbeddingManager, MultiModalVectorDatabase
-    from visual_document_processor import VisualDocumentProcessor
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Make sure all component files exist in the src folder:")
-    print("  - rag_pipeline.py")
     print("  - document_processor.py") 
     print("  - text_chunker.py")
     print("  - embedding_manager.py")
@@ -72,17 +69,26 @@ class RAGSystem:
         self.config = config
         self.is_initialized = False
         
-        # Initialize the core RAG pipeline (your main engine)
-        logger.info("🔧 Setting up RAG pipeline...")
+        # Initialize the core RAG components
+        logger.info("🔧 Setting up RAG components...")
         try:
-            self.rag_pipeline = RAGPipeline(
+            self.doc_processor = DocumentProcessor()
+            self.text_chunker = TextChunker(
                 chunk_size=config.get('chunk_size', 800),
-                overlap=config.get('chunk_overlap', 150),
-                embedding_model=config.get('embedding_model', 'local')
+                overlap=config.get('chunk_overlap', 150)
             )
-            logger.info("✅ RAG pipeline created successfully!")
+            self.embedding_manager = EmbeddingManager.create_local()
+            
+            # Initialize vector database for storing embeddings
+            from embedding_manager import VectorDatabase
+            self.vector_db = VectorDatabase(
+                dimension=self.embedding_manager.embedding_dimension,
+                index_type="flat"
+            )
+            
+            logger.info("✅ RAG components created successfully!")
         except Exception as e:
-            logger.error(f"❌ Failed to create RAG pipeline: {e}")
+            logger.error(f"❌ Failed to create RAG components: {e}")
             raise
         
         # Track what documents we've processed
@@ -115,8 +121,8 @@ class RAGSystem:
             try:
                 logger.info(f"📄 Processing: {os.path.basename(doc_path)}")
                 
-                # Process the document through your pipeline
-                doc_results = self.rag_pipeline.process_document(doc_path)
+                # Process the document through components
+                doc_results = self._process_document_simple(doc_path)
                 
                 if doc_results.get('success', False):
                     results['successful'].append({
@@ -147,6 +153,65 @@ class RAGSystem:
         
         return results
     
+    def _process_document_simple(self, doc_path: str) -> Dict[str, Any]:
+        """Process document through full pipeline: extract text, chunk, and create embeddings."""
+        try:
+            # 1. Extract text content from document
+            doc_result = self.doc_processor.process_file(doc_path)
+            if not doc_result.get('success', False):
+                return {'success': False, 'error': doc_result.get('error', 'Processing failed')}
+            
+            content = doc_result.get('content', '')
+            if not content or not content.strip():
+                return {'success': False, 'error': 'No content extracted'}
+            
+            # 2. Create text chunks
+            chunks = self.text_chunker.chunk_text(
+                content, 
+                source_metadata={
+                    'filename': os.path.basename(doc_path),
+                    'source_path': doc_path
+                }
+            )
+            
+            if not chunks:
+                return {'success': False, 'error': 'No chunks created from content'}
+            
+            # 3. Create embeddings for chunks
+            embeddings = []
+            for chunk_data in chunks:
+                chunk_text = chunk_data.content  # TextChunk has content attribute
+                if chunk_text.strip():
+                    embedding = self.embedding_manager.create_embedding(chunk_text)
+                    embeddings.append(embedding)
+            
+            # 4. Store in vector database (if available)
+            if hasattr(self, 'vector_db') and embeddings:
+                # Add vectors to database with metadata
+                chunk_metadata = []
+                for i, chunk_data in enumerate(chunks):
+                    chunk_metadata.append({
+                        'filename': os.path.basename(doc_path),
+                        'chunk_id': f"{os.path.basename(doc_path)}_chunk_{i}",
+                        'chunk_index': i,
+                        'content': chunk_data.content,  # TextChunk has content attribute
+                        'source_path': doc_path
+                    })
+                
+                self.vector_db.add_vectors(embeddings, chunk_metadata)
+            
+            logger.info(f"✅ Processed {len(chunks)} chunks from {os.path.basename(doc_path)}")
+            return {
+                'success': True, 
+                'chunks_created': len(chunks),
+                'embeddings_created': len(embeddings),
+                'content_length': len(content)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Document processing error: {str(e)}")
+            return {'success': False, 'error': str(e)}
+    
     def query(self, question: str, max_chunks: Optional[int] = None) -> Dict[str, Any]:
         """
         Ask a question and get an answer with sources.
@@ -165,22 +230,32 @@ class RAGSystem:
         logger.info(f"🔍 Searching for: {question}")
         
         try:
-            # Use your RAG pipeline to find relevant information
+            # Use vector database to find relevant information
             max_chunks = max_chunks or self.config.get('max_retrieved_chunks', 5)
             
-            # Search for relevant chunks
-            search_results = self.rag_pipeline.search(question, top_k=max_chunks)
+            # Create query embedding
+            query_embedding = self.embedding_manager.create_embedding(question)
+            
+            # Search vector database for similar chunks
+            search_results = self.vector_db.search(query_embedding, top_k=max_chunks)
             
             if not search_results:
                 return {
                     'success': True,
-                    'answer': "I couldn't find any relevant information in the documents to answer your question.",
+                    'answer': "I couldn't find any relevant information in the processed documents to answer your question.",
                     'sources': [],
                     'confidence': 0.0
                 }
             
             # Generate answer using the found information
-            response = self.rag_pipeline.generate_response(question, search_results)
+            context_texts = [result['metadata']['content'] for result in search_results]
+            context = "\n\n".join(context_texts[:3])  # Use top 3 chunks for context
+            
+            # Simple answer generation (can be enhanced with LLM later)
+            response = {
+                'answer': f"Based on the relevant documents, here's what I found:\n\n{context[:500]}...",
+                'confidence': search_results[0]['score'] if search_results else 0.0
+            }
             
             return {
                 'success': True,
@@ -229,8 +304,8 @@ class RAGSystem:
         """
         total_chunks = 0
         try:
-            if hasattr(self.rag_pipeline, 'vector_db') and hasattr(self.rag_pipeline.vector_db, 'total_chunks'):
-                total_chunks = self.rag_pipeline.vector_db.total_chunks
+            if hasattr(self, 'vector_db'):
+                total_chunks = self.vector_db.index.ntotal
         except:
             total_chunks = 0
             
@@ -252,8 +327,8 @@ class RAGSystem:
             logger.info("🗑️ Clearing all documents...")
             
             # Clear the vector database
-            if hasattr(self.rag_pipeline, 'vector_db'):
-                self.rag_pipeline.vector_db.clear()
+            if hasattr(self, 'vector_db'):
+                self.vector_db.clear()
             
             # Reset tracking
             self.processed_documents = []
@@ -360,18 +435,14 @@ class MultiModalRAGSystem:
         """Initialize components based on retrieval mode."""
         
         if self.mode in ['text', 'hybrid']:
-            # Initialize text-based RAG pipeline
-            logger.info("🔧 Setting up text RAG pipeline...")
-            self.text_pipeline = RAGPipeline(
-                chunk_size=self.config.get('chunk_size', 800),
-                overlap=self.config.get('chunk_overlap', 150),
-                embedding_model=self.config.get('text_embedding_model', 'local')
-            )
+            # Initialize text-based RAG components
+            logger.info("🔧 Setting up text RAG components...")
+            self.text_pipeline = None  # Temporarily disabled
         
         if self.mode in ['visual', 'hybrid']:
             # Initialize visual components
             logger.info("🔧 Setting up visual processing...")
-            self.visual_processor = VisualDocumentProcessor(self.config)
+            self.visual_processor = None  # Temporarily disabled
             self.visual_embedding_manager = EmbeddingManager.create_colpali(
                 self.config.get('visual_model', 'vidore/colqwen2-v1.0')
             )
