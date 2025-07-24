@@ -26,7 +26,11 @@ from pathlib import Path
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
-from embedding_manager import EmbeddingManager
+# Try absolute import first, fallback to relative
+try:
+    from src.embedding_manager import EmbeddingManager
+except ImportError:
+    from embedding_manager import EmbeddingManager
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +96,7 @@ class ColPaliRetriever:
             
             # Initialize visual document processor
             try:
-                from visual_document_processor import VisualDocumentProcessor
+                from src.visual_document_processor import VisualDocumentProcessor
                 self.visual_processor = VisualDocumentProcessor(visual_config)
                 logger.info("✅ VisualDocumentProcessor initialized successfully")
             except ImportError as e:
