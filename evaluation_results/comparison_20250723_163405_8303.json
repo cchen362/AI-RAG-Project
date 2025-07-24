@@ -1,0 +1,90 @@
+{
+  "query": "what is figure 1 in MCP Zero paper about?",
+  "evaluations": [
+    {
+      "query": "what is figure 1 in MCP Zero paper about?",
+      "retriever_type": "text",
+      "answer": "1. Belowweprovideapracticalguidefor\n60.22 (multi-turn); MCP-Zero instead keeps accuracy\nintegratingtheseideasintoexistingagentframeworks. at 95.19 / 90.32 respectively, demonstrating strong re-\nStep1Prom...\n\n2. --- Page 1 ---\n5202\nnuJ\n42\n]IA.sc[\n4v65010.6052:viXra\nMCP-Zero: Active Tool Discovery for Autonomous LLM Agents\nXiangFei XiawuZheng* HaoFeng\nxiangf@stu.xmu.edu.cn zhengxiawu@xmu.edu.cn haof@mail.ustc....\n\n3. comprehensivetoolcollectionswhilemaintaininghightask\nImportantly, the model can generate multiple such re-\ncompletionaccuracy. MCP-Zerorepresentsafundamental\nquests throughout a single conversation, w...",
+      "retrieval_results": [
+        {
+          "content": "Belowweprovideapracticalguidefor\n60.22 (multi-turn); MCP-Zero instead keeps accuracy\nintegratingtheseideasintoexistingagentframeworks. at 95.19 / 90.32 respectively, demonstrating strong re-\nStep1Prom...",
+          "score": 0.315,
+          "metadata": {
+            "number": 1,
+            "content": "Belowweprovideapracticalguidefor\n60.22 (multi-turn); MCP-Zero instead keeps accuracy\nintegratingtheseideasintoexistingagentframeworks. at 95.19 / 90.32 respectively, demonstrating strong re-\nStep1Prom...",
+            "score": 0.315,
+            "type": "text_chunk",
+            "metadata": {
+              "filename": "tmp3d83ziwo_MCP Zero Paper.pdf",
+              "chunk_id": "sentence_chunk_005",
+              "file_path": "C:\\Users\\cchen362\\AppData\\Local\\Temp\\tmp3d83ziwo_MCP Zero Paper.pdf",
+              "retriever_type": "text",
+              "chunk_size": 800,
+              "embedding_model": "local"
+            },
+            "filename": "tmp3d83ziwo_MCP Zero Paper.pdf"
+          }
+        },
+        {
+          "content": "--- Page 1 ---\n5202\nnuJ\n42\n]IA.sc[\n4v65010.6052:viXra\nMCP-Zero: Active Tool Discovery for Autonomous LLM Agents\nXiangFei XiawuZheng* HaoFeng\nxiangf@stu.xmu.edu.cn zhengxiawu@xmu.edu.cn haof@mail.ustc....",
+          "score": 0.294,
+          "metadata": {
+            "number": 2,
+            "content": "--- Page 1 ---\n5202\nnuJ\n42\n]IA.sc[\n4v65010.6052:viXra\nMCP-Zero: Active Tool Discovery for Autonomous LLM Agents\nXiangFei XiawuZheng* HaoFeng\nxiangf@stu.xmu.edu.cn zhengxiawu@xmu.edu.cn haof@mail.ustc....",
+            "score": 0.294,
+            "type": "text_chunk",
+            "metadata": {
+              "filename": "tmp3d83ziwo_MCP Zero Paper.pdf",
+              "chunk_id": "sentence_chunk_000",
+              "file_path": "C:\\Users\\cchen362\\AppData\\Local\\Temp\\tmp3d83ziwo_MCP Zero Paper.pdf",
+              "retriever_type": "text",
+              "chunk_size": 800,
+              "embedding_model": "local"
+            },
+            "filename": "tmp3d83ziwo_MCP Zero Paper.pdf"
+          }
+        },
+        {
+          "content": "comprehensivetoolcollectionswhilemaintaininghightask\nImportantly, the model can generate multiple such re-\ncompletionaccuracy. MCP-Zerorepresentsafundamental\nquests throughout a single conversation, w...",
+          "score": 0.148,
+          "metadata": {
+            "number": 3,
+            "content": "comprehensivetoolcollectionswhilemaintaininghightask\nImportantly, the model can generate multiple such re-\ncompletionaccuracy. MCP-Zerorepresentsafundamental\nquests throughout a single conversation, w...",
+            "score": 0.148,
+            "type": "text_chunk",
+            "metadata": {
+              "filename": "tmp3d83ziwo_MCP Zero Paper.pdf",
+              "chunk_id": "sentence_chunk_003",
+              "file_path": "C:\\Users\\cchen362\\AppData\\Local\\Temp\\tmp3d83ziwo_MCP Zero Paper.pdf",
+              "retriever_type": "text",
+              "chunk_size": 800,
+              "embedding_model": "local"
+            },
+            "filename": "tmp3d83ziwo_MCP Zero Paper.pdf"
+          }
+        }
+      ],
+      "metrics": {
+        "query_time": 0.024540424346923828,
+        "total_results": 3,
+        "avg_score": 0.2520407090584437,
+        "max_score": 0.31452181935310364,
+        "tokens_used": 6694,
+        "cost_estimate": 0.0
+      },
+      "timestamp": "2025-07-23T16:34:01.930153",
+      "relevance_score": 0.25233333333333335,
+      "completeness_score": 1.0,
+      "accuracy_score": 0.315,
+      "overall_score": 0.4954333333333334,
+      "evaluation_method": "automated",
+      "human_feedback": null
+    }
+  ],
+  "best_retriever": "text",
+  "performance_ranking": [
+    "text"
+  ],
+  "key_differences": [],
+  "timestamp": "2025-07-23T16:34:05.541030"
+}

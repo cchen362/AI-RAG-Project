@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(rag_envScriptsactivate.bat)",
-      "Bash(.rag_envScriptsactivate)"
+      "Bash(.rag_envScriptsactivate)",
+      "Bash(find:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
