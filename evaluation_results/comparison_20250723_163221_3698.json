@@ -1,0 +1,90 @@
+{
+  "query": "what is semantic search?",
+  "evaluations": [
+    {
+      "query": "what is semantic search?",
+      "retriever_type": "text",
+      "answer": "1. Semantic search through case database\n2. Find conceptually similar cases (not just keyword matches) 3. Generate\nsummary with relevant precedents 4. Provide citations for verification Time:\nMinutes\n\n--...\n\n2. Chunk Strategies - \"Smart Information Packaging\"\nThe Goldilocks Problem: - Too small chunks: Lose context (\"...said yes.\" -\nYes to what?) - Too large chunks: Too much irrelevant information - Just rig...\n\n3. --- Page 1 ---\nRAG Architecture Study Guide\nComplete Learning Guide for AI Knowledge\nAssignment\nTable of Contents\n1. Introduction to RAG\n2. Key Concepts Explained with Real-Life Examples\n3. Week-by-We...",
+      "retrieval_results": [
+        {
+          "content": "Semantic search through case database\n2. Find conceptually similar cases (not just keyword matches) 3. Generate\nsummary with relevant precedents 4. Provide citations for verification Time:\nMinutes\n\n--...",
+          "score": 0.501,
+          "metadata": {
+            "number": 1,
+            "content": "Semantic search through case database\n2. Find conceptually similar cases (not just keyword matches) 3. Generate\nsummary with relevant precedents 4. Provide citations for verification Time:\nMinutes\n\n--...",
+            "score": 0.501,
+            "type": "text_chunk",
+            "metadata": {
+              "filename": "tmp39sdbdts_RAG_Study_Guide_Master.pdf",
+              "chunk_id": "sentence_chunk_002",
+              "file_path": "C:\\Users\\cchen362\\AppData\\Local\\Temp\\tmp39sdbdts_RAG_Study_Guide_Master.pdf",
+              "retriever_type": "text",
+              "chunk_size": 800,
+              "embedding_model": "local"
+            },
+            "filename": "tmp39sdbdts_RAG_Study_Guide_Master.pdf"
+          }
+        },
+        {
+          "content": "Chunk Strategies - \"Smart Information Packaging\"\nThe Goldilocks Problem: - Too small chunks: Lose context (\"...said yes.\" -\nYes to what?) - Too large chunks: Too much irrelevant information - Just rig...",
+          "score": 0.356,
+          "metadata": {
+            "number": 2,
+            "content": "Chunk Strategies - \"Smart Information Packaging\"\nThe Goldilocks Problem: - Too small chunks: Lose context (\"...said yes.\" -\nYes to what?) - Too large chunks: Too much irrelevant information - Just rig...",
+            "score": 0.356,
+            "type": "text_chunk",
+            "metadata": {
+              "filename": "tmp39sdbdts_RAG_Study_Guide_Master.pdf",
+              "chunk_id": "sentence_chunk_001",
+              "file_path": "C:\\Users\\cchen362\\AppData\\Local\\Temp\\tmp39sdbdts_RAG_Study_Guide_Master.pdf",
+              "retriever_type": "text",
+              "chunk_size": 800,
+              "embedding_model": "local"
+            },
+            "filename": "tmp39sdbdts_RAG_Study_Guide_Master.pdf"
+          }
+        },
+        {
+          "content": "--- Page 1 ---\nRAG Architecture Study Guide\nComplete Learning Guide for AI Knowledge\nAssignment\nTable of Contents\n1. Introduction to RAG\n2. Key Concepts Explained with Real-Life Examples\n3. Week-by-We...",
+          "score": 0.311,
+          "metadata": {
+            "number": 3,
+            "content": "--- Page 1 ---\nRAG Architecture Study Guide\nComplete Learning Guide for AI Knowledge\nAssignment\nTable of Contents\n1. Introduction to RAG\n2. Key Concepts Explained with Real-Life Examples\n3. Week-by-We...",
+            "score": 0.311,
+            "type": "text_chunk",
+            "metadata": {
+              "filename": "tmp39sdbdts_RAG_Study_Guide_Master.pdf",
+              "chunk_id": "sentence_chunk_000",
+              "file_path": "C:\\Users\\cchen362\\AppData\\Local\\Temp\\tmp39sdbdts_RAG_Study_Guide_Master.pdf",
+              "retriever_type": "text",
+              "chunk_size": 800,
+              "embedding_model": "local"
+            },
+            "filename": "tmp39sdbdts_RAG_Study_Guide_Master.pdf"
+          }
+        }
+      ],
+      "metrics": {
+        "query_time": 0.02010059356689453,
+        "total_results": 3,
+        "avg_score": 0.3893898030122121,
+        "max_score": 0.5005744695663452,
+        "tokens_used": 3071,
+        "cost_estimate": 0.0
+      },
+      "timestamp": "2025-07-23T16:32:17.019900",
+      "relevance_score": 0.3893333333333333,
+      "completeness_score": 1.0,
+      "accuracy_score": 0.501,
+      "overall_score": 0.6060333333333333,
+      "evaluation_method": "automated",
+      "human_feedback": null
+    }
+  ],
+  "best_retriever": "text",
+  "performance_ranking": [
+    "text"
+  ],
+  "key_differences": [],
+  "timestamp": "2025-07-23T16:32:21.128988"
+}

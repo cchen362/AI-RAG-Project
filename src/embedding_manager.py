@@ -7,6 +7,14 @@ import pickle
 import hashlib
 
 # Heavy imports moved to methods for faster startup
+try:
+    from visual_document_processor import VisualDocumentProcessor
+except ImportError:
+    # Fallback for different import contexts
+    try:
+        from .visual_document_processor import VisualDocumentProcessor
+    except ImportError:
+        VisualDocumentProcessor = None
 
 class EmbeddingManager:
     """
@@ -29,6 +37,8 @@ class EmbeddingManager:
         if model_name is None:
             if embedding_model == "openai":
                 self.model_name = "text-embedding-ada-002"
+            elif embedding_model == "colpali":
+                self.model_name = "vidore/colqwen2-v1.0"
             else:  # local
                 self.model_name = "all-MiniLM-L6-v2"
         else:
@@ -65,6 +75,11 @@ class EmbeddingManager:
     def create_openai(cls, model_name: str = "text-embedding-ada-002"):
         """Create an OpenAI embedding manager (requires API key)."""
         return cls(embedding_model="openai", model_name=model_name)
+    
+    @classmethod
+    def create_colpali(cls, model_name: str = "vidore/colqwen2-v1.0"):
+        """Create a ColPali visual embedding manager (requires GPU for best performance)."""
+        return cls(embedding_model="colpali", model_name=model_name)
 
     def _initialize_model(self):
         """Initialize the embedding model based on configuration."""
@@ -90,6 +105,20 @@ class EmbeddingManager:
             self.model = SentenceTransformer(self.model_name)
             self.embedding_dimension = self.model.get_sentence_embedding_dimension()
             self.logger.info(f"✅ Initialized local embeddings with model: {self.model_name}")
+
+        elif self.embedding_model == "colpali":
+            # Initialize ColPali visual processor
+            if VisualDocumentProcessor is None:
+                raise ImportError("VisualDocumentProcessor not available. Check visual_document_processor.py")
+            
+            config = {
+                'colpali_model': self.model_name,
+                'cache_dir': self.cache_dir
+            }
+            self.visual_processor = VisualDocumentProcessor(config)
+            # ColPali uses 128-dimensional embeddings per patch
+            self.embedding_dimension = 128
+            self.logger.info(f"✅ Initialized ColPali visual embeddings with model: {self.model_name}")
 
         else:
             raise ValueError(f"Unsupported embedding model: {self.embedding_model}")
@@ -120,6 +149,11 @@ class EmbeddingManager:
         try:
             if self.embedding_model == "openai":
                 embedding = self._create_openai_embedding(text)
+            elif self.embedding_model == "colpali":
+                # For ColPali, text-only embedding isn't the primary use case
+                # Return zero vector or raise error for text-only queries
+                self.logger.warning("ColPali is designed for visual documents. Consider using create_visual_embedding instead.")
+                return np.zeros(self.embedding_dimension)
             else:
                 embedding = self._create_local_embedding(text)
 
@@ -163,6 +197,66 @@ class EmbeddingManager:
         
         except Exception as e:
             self.logger.error(f"Local embedding failed: {str(e)}")
+            raise
+
+    def create_visual_embedding(self, file_path: str, cache_key: str = None) -> Dict[str, Any]:
+        """
+        Create visual embeddings for a document using ColPali.
+        
+        Returns a dictionary containing multiple embeddings (one per page/patch)
+        and associated metadata for multi-vector search.
+        """
+        if self.embedding_model != "colpali":
+            raise ValueError("Visual embeddings are only supported with ColPali model")
+        
+        if not file_path or not os.path.exists(file_path):
+            raise ValueError(f"Invalid file path: {file_path}")
+        
+        # Generate cache key if not provided
+        if cache_key is None:
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+                cache_key = hashlib.md5(file_content).hexdigest()
+        
+        # Check cache first
+        if self.cache_embeddings:
+            cached_result = self._load_visual_from_cache(cache_key)
+            if cached_result is not None:
+                self.stats['cache_hits'] += 1
+                return cached_result
+        
+        try:
+            # Process document with visual processor
+            result = self.visual_processor.process_file(file_path)
+            
+            if result['status'] == 'error':
+                raise Exception(result['error'])
+            
+            # Cache the result
+            if self.cache_embeddings:
+                self._save_visual_to_cache(cache_key, result)
+            
+            # Update statistics
+            self.stats['embeddings_created'] += 1
+            self.stats['cache_misses'] += 1
+            self.stats['total_tokens_processed'] += result['metadata'].get('page_count', 0) * 1024  # Estimate tokens per page
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create visual embedding for {file_path}: {str(e)}")
+            raise
+
+    def query_visual_embeddings(self, query: str, document_embeddings: Any) -> Any:
+        """Query visual embeddings using ColPali."""
+        if self.embedding_model != "colpali":
+            raise ValueError("Visual querying is only supported with ColPali model")
+        
+        try:
+            scores = self.visual_processor.query_embeddings(query, document_embeddings)
+            return scores
+        except Exception as e:
+            self.logger.error(f"Failed to query visual embeddings: {str(e)}")
             raise
 
     def create_batch_embeddings(self, texts: List[str], batch_size: int = 10) -> List[np.ndarray]:
@@ -255,6 +349,43 @@ class EmbeddingManager:
         except Exception as e:
             self.logger.warning(f"Failed to save cache {cache_key}: {str(e)}")
 
+    def _load_visual_from_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Load visual embedding result from cache."""
+        cache_path = os.path.join(self.cache_dir, f"visual_{cache_key}.pkl")
+
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'rb') as f:
+                    return pickle.load(f)
+            except Exception as e:
+                self.logger.warning(f"Failed to load visual cache {cache_key}: {str(e)}")
+
+        return None
+
+    def _save_visual_to_cache(self, cache_key: str, result: Dict[str, Any]):
+        """Save visual embedding result to cache."""
+        cache_path = os.path.join(self.cache_dir, f"visual_{cache_key}.pkl")
+
+        try:
+            # Don't cache the PIL images, only the embeddings and metadata
+            cache_result = {
+                'file_path': result['file_path'],
+                'file_info': result['file_info'],
+                'page_info': result['page_info'],
+                'embeddings': result['embeddings'],
+                'metadata': result['metadata'],
+                'processing_time': result['processing_time'],
+                'status': result['status'],
+                'embedding_type': result['embedding_type'],
+                'model_name': result['model_name'],
+                'device': result['device']
+            }
+            
+            with open(cache_path, 'wb') as f:
+                pickle.dump(cache_result, f)
+        except Exception as e:
+            self.logger.warning(f"Failed to save visual cache {cache_key}: {str(e)}")
+
     def calculate_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
         """
         Calculate cosine similarity between two embeddings.
@@ -333,6 +464,7 @@ class VectorDatabase:
     
     def __init__(self, dimension: int, index_type: str = "flat"):
         """
+
         Initialize vector database.
         
         Args:
@@ -517,3 +649,296 @@ class VectorDatabase:
             self.index_type = data['index_type']
         
         self.logger.info(f"Loaded database from {filepath}")
+
+
+class MultiModalVectorDatabase:
+    """
+    Multi-modal vector database supporting both text and visual embeddings.
+    
+    Handles ColPali's multi-vector approach where each document generates
+    multiple embeddings (one per patch/page) with late interaction scoring.
+    """
+    
+    def __init__(self, text_dimension: int = None, visual_dimension: int = 128):
+        """
+        Initialize multi-modal vector database.
+        
+        Args:
+            text_dimension: Dimension for text embeddings (if using hybrid mode)
+            visual_dimension: Dimension for visual embeddings (128 for ColPali)
+        """
+        import faiss
+        
+        self.text_dimension = text_dimension
+        self.visual_dimension = visual_dimension
+        
+        # Separate indices for different embedding types
+        self.text_index = None
+        self.visual_index = None
+        
+        if text_dimension:
+            self.text_index = faiss.IndexFlatIP(text_dimension)
+        
+        if visual_dimension:
+            self.visual_index = faiss.IndexFlatIP(visual_dimension)
+        
+        # Metadata storage
+        self.text_metadata = []
+        self.visual_metadata = []
+        self.visual_documents = {}  # Store multi-vector documents
+        
+        # ID management
+        self.text_id_to_index = {}
+        self.visual_id_to_index = {}
+        self.next_text_id = 0
+        self.next_visual_id = 0
+        
+        # Set up logging
+        self.logger = logging.getLogger(__name__)
+    
+    def add_text_vectors(self, embeddings: List[np.ndarray], metadata: List[Dict[str, Any]]):
+        """Add text embeddings to the database."""
+        if not self.text_index:
+            raise ValueError("Text index not initialized. Provide text_dimension during initialization.")
+        
+        import faiss
+        
+        if len(embeddings) != len(metadata):
+            raise ValueError("Number of embeddings must match number of metadata entries")
+        
+        # Convert to numpy array for FAISS
+        embeddings_array = np.array(embeddings, dtype=np.float32)
+        
+        # Normalize vectors for cosine similarity
+        faiss.normalize_L2(embeddings_array)
+        
+        # Add to index
+        start_idx = self.text_index.ntotal
+        self.text_index.add(embeddings_array)
+        
+        # Store metadata
+        for i, meta in enumerate(metadata):
+            doc_id = self.next_text_id
+            self.text_id_to_index[doc_id] = start_idx + i
+            
+            # Add ID to metadata
+            meta_with_id = {**meta, 'id': doc_id, 'type': 'text'}
+            self.text_metadata.append(meta_with_id)
+            
+            self.next_text_id += 1
+        
+        self.logger.info(f"Added {len(embeddings)} text vectors. Total text: {self.text_index.ntotal}")
+    
+    def add_visual_document(self, embeddings: Any, metadata: Dict[str, Any]):
+        """
+        Add visual document with multi-vector embeddings.
+        
+        Args:
+            embeddings: ColPali multi-vector embeddings (torch.Tensor)
+            metadata: Document metadata including file info and page info
+        """
+        import torch
+        import faiss
+        
+        doc_id = self.next_visual_id
+        
+        # Store the full multi-vector embeddings for the document
+        self.visual_documents[doc_id] = {
+            'embeddings': embeddings.cpu().detach() if torch.is_tensor(embeddings) else embeddings,
+            'metadata': {**metadata, 'id': doc_id, 'type': 'visual'}
+        }
+        
+        # For search efficiency, we can also flatten and add individual patches to FAISS
+        if torch.is_tensor(embeddings):
+            # Flatten the multi-vector embeddings
+            if len(embeddings.shape) > 2:
+                flat_embeddings = embeddings.view(-1, embeddings.shape[-1])
+            else:
+                flat_embeddings = embeddings
+            
+            flat_embeddings = flat_embeddings.cpu().numpy().astype(np.float32)
+            
+            # Normalize for cosine similarity
+            faiss.normalize_L2(flat_embeddings)
+            
+            # Add to visual index
+            start_idx = self.visual_index.ntotal
+            self.visual_index.add(flat_embeddings)
+            
+            # Create metadata for each patch
+            for i in range(len(flat_embeddings)):
+                patch_metadata = {
+                    'document_id': doc_id,
+                    'patch_index': i,
+                    'type': 'visual_patch',
+                    'parent_metadata': metadata
+                }
+                self.visual_metadata.append(patch_metadata)
+                self.visual_id_to_index[f"{doc_id}_{i}"] = start_idx + i
+        
+        self.next_visual_id += 1
+        
+        self.logger.info(f"Added visual document {doc_id}. Total visual docs: {len(self.visual_documents)}")
+    
+    def search_text(self, query_embedding: np.ndarray, top_k: int = 5) -> List[Dict[str, Any]]:
+        """Search text embeddings."""
+        if not self.text_index or self.text_index.ntotal == 0:
+            return []
+        
+        import faiss
+        
+        # Normalize query vector
+        query_normalized = query_embedding.copy().reshape(1, -1)
+        faiss.normalize_L2(query_normalized)
+        
+        # Search
+        scores, indices = self.text_index.search(query_normalized, top_k)
+        
+        # Combine results with metadata
+        results = []
+        for i, (score, idx) in enumerate(zip(scores[0], indices[0])):
+            if idx != -1:  # Valid result
+                result = {
+                    'score': float(score),
+                    'rank': i + 1,
+                    'metadata': self.text_metadata[idx],
+                    'type': 'text'
+                }
+                results.append(result)
+        
+        return results
+    
+    def search_visual(self, query: str, embedding_manager: 'EmbeddingManager', top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search visual documents using ColPali's multi-vector approach.
+        
+        Args:
+            query: Text query string
+            embedding_manager: EmbeddingManager with ColPali model
+            top_k: Number of documents to return
+        """
+        if not self.visual_documents:
+            return []
+        
+        # Calculate scores for each document using ColPali's scoring method
+        document_scores = []
+        
+        for doc_id, doc_data in self.visual_documents.items():
+            try:
+                # Use ColPali's scoring method
+                scores = embedding_manager.query_visual_embeddings(query, doc_data['embeddings'])
+                
+                # Get the maximum score for this document
+                if hasattr(scores, 'max'):
+                    max_score = float(scores.max())
+                else:
+                    max_score = float(scores)
+                
+                document_scores.append({
+                    'document_id': doc_id,
+                    'score': max_score,
+                    'metadata': doc_data['metadata']
+                })
+                
+            except Exception as e:
+                self.logger.warning(f"Error scoring document {doc_id}: {e}")
+                continue
+        
+        # Sort by score and return top_k
+        document_scores.sort(key=lambda x: x['score'], reverse=True)
+        
+        results = []
+        for i, doc_score in enumerate(document_scores[:top_k]):
+            result = {
+                'score': doc_score['score'],
+                'rank': i + 1,
+                'metadata': doc_score['metadata'],
+                'type': 'visual'
+            }
+            results.append(result)
+        
+        return results
+    
+    def search_hybrid(self, query_embedding: np.ndarray, query: str, 
+                     embedding_manager: 'EmbeddingManager', top_k: int = 5, 
+                     text_weight: float = 0.5) -> List[Dict[str, Any]]:
+        """
+        Hybrid search combining text and visual results.
+        
+        Args:
+            query_embedding: Text embedding for the query
+            query: Original query string for visual search
+            embedding_manager: EmbeddingManager with models
+            top_k: Total number of results to return
+            text_weight: Weight for text results (0.0 to 1.0)
+        """
+        text_results = []
+        visual_results = []
+        
+        # Get text results if available
+        if self.text_index and self.text_index.ntotal > 0:
+            text_results = self.search_text(query_embedding, top_k * 2)  # Get more to rerank
+        
+        # Get visual results if available
+        if self.visual_documents:
+            visual_results = self.search_visual(query, embedding_manager, top_k * 2)
+        
+        # Combine and rerank results
+        combined_results = []
+        
+        # Add text results with weight
+        for result in text_results:
+            result['weighted_score'] = result['score'] * text_weight
+            result['source'] = 'text'
+            combined_results.append(result)
+        
+        # Add visual results with weight
+        visual_weight = 1.0 - text_weight
+        for result in visual_results:
+            result['weighted_score'] = result['score'] * visual_weight
+            result['source'] = 'visual'
+            combined_results.append(result)
+        
+        # Sort by weighted score and return top_k
+        combined_results.sort(key=lambda x: x['weighted_score'], reverse=True)
+        
+        # Re-rank the combined results
+        final_results = []
+        for i, result in enumerate(combined_results[:top_k]):
+            result['rank'] = i + 1
+            final_results.append(result)
+        
+        return final_results
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get database statistics."""
+        return {
+            'text_vectors': self.text_index.ntotal if self.text_index else 0,
+            'visual_documents': len(self.visual_documents),
+            'visual_patches': self.visual_index.ntotal if self.visual_index else 0,
+            'text_dimension': self.text_dimension,
+            'visual_dimension': self.visual_dimension,
+            'total_metadata_entries': len(self.text_metadata) + len(self.visual_metadata)
+        }
+    
+    def clear(self):
+        """Clear all vectors and metadata."""
+        import faiss
+        
+        # Reinitialize indices
+        if self.text_dimension and self.text_index:
+            self.text_index = faiss.IndexFlatIP(self.text_dimension)
+        
+        if self.visual_dimension and self.visual_index:
+            self.visual_index = faiss.IndexFlatIP(self.visual_dimension)
+        
+        # Clear all data
+        self.text_metadata = []
+        self.visual_metadata = []
+        self.visual_documents = {}
+        self.text_id_to_index = {}
+        self.visual_id_to_index = {}
+        self.next_text_id = 0
+        self.next_visual_id = 0
+        
+        self.logger.info("🗑️ Cleared all multi-modal vectors and metadata")

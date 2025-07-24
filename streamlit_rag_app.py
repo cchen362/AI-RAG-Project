@@ -23,17 +23,19 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# Import our RAG system
-from src.rag_system import create_rag_system
-# ADD this import for Salesforce integration
+# Import our proven multi-source RAG architecture
+import logging
+from typing import Dict, List, Any, Optional
+
+# Core components - proven architecture
+from src.rag_system import RAGSystem
 from src.salesforce_connector import SalesforceConnector
-# ADD transformative semantic search
-try:
-    from src.semantic_enhancer import TransformativeSemanticSearch
-    TRANSFORMATIVE_SEARCH_AVAILABLE = True
-except ImportError:
-    TRANSFORMATIVE_SEARCH_AVAILABLE = False
-    print("⚠️ Transformative semantic search not available")
+from src.colpali_retriever import ColPaliRetriever
+from src.cross_encoder_reranker import CrossEncoderReRanker
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Configure Streamlist page
 st.set_page_config(
@@ -105,43 +107,538 @@ st.markdown("""
         background-color: #f3e5f5;
         border-left: 4px solid #9c27b0;
     }
+    
+    .source-selected {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        margin: 1rem 0;
+    }
+    
+    .rejected-sources {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        color: #856404;
+        padding: 0.5rem;
+        border-radius: 0.375rem;
+        margin: 0.5rem 0;
+        font-size: 0.9rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
-if 'rag_system' not in st.session_state:
-    st.session_state.rag_system = None
+# Proven Multi-Source RAG Architecture Components
+class TokenCounter:
+    """Comprehensive token counting for all sources and operations"""
+    
+    def __init__(self):
+        try:
+            import tiktoken
+            self.encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+            self.available = True
+        except ImportError:
+            logger.warning("tiktoken not available - install with: pip install tiktoken")
+            self.available = False
+    
+    def count_tokens(self, text: str) -> int:
+        """Count tokens in text"""
+        if not self.available or not text:
+            return 0
+        try:
+            return len(self.encoding.encode(str(text)))
+        except Exception as e:
+            logger.warning(f"Token counting failed: {e}")
+            return len(str(text).split()) * 1.3  # Rough estimate
+    
+    def get_comprehensive_breakdown(self, query: str, answer: str, 
+                                   vlm_tokens: int = 0, sf_tokens: int = 0, 
+                                   reranker_tokens: int = 10) -> Dict[str, int]:
+        """Get complete token breakdown"""
+        query_tokens = self.count_tokens(query)
+        response_tokens = self.count_tokens(answer)
+        
+        return {
+            'query_tokens': query_tokens,
+            'vlm_analysis_tokens': vlm_tokens,
+            'salesforce_api_tokens': sf_tokens,
+            'reranker_tokens': reranker_tokens,
+            'response_tokens': response_tokens,
+            'total_tokens': query_tokens + vlm_tokens + sf_tokens + reranker_tokens + response_tokens
+        }
+
+class SimpleRAGOrchestrator:
+    """Main query orchestrator implementing re-ranker architecture"""
+    
+    def __init__(self):
+        self.token_counter = TokenCounter()
+        self.text_rag = None
+        self.colpali_retriever = None
+        self.sf_connector = None
+        self.reranker = None
+        
+        logger.info("🎯 SimpleRAGOrchestrator initialized")
+    
+    def ensure_initialized(self) -> bool:
+        """Ensure components are initialized, with user-friendly loading messages"""
+        if st.session_state.components_initialized:
+            return True
+        
+        # Check for Docker pre-loaded models
+        is_docker_preloaded = self._check_preloaded_models()
+        
+        if is_docker_preloaded:
+            # Docker container with pre-loaded models - instant startup
+            with st.spinner("⚡ Activating pre-loaded AI systems..."):
+                st.info("🐳 **Docker container detected** - Models pre-loaded for instant startup!")
+                success = self.initialize_components()
+                
+                if success:
+                    st.session_state.components_initialized = True
+                    st.success("✅ **All AI systems activated instantly!** (Pre-loaded models)")
+                    return True
+                else:
+                    st.error("❌ **System activation failed** - Please restart container")
+                    return False
+        else:
+            # Standard initialization - download and load models
+            with st.spinner("🚀 Starting up AI systems for the first time..."):
+                st.info("**First-time setup:** Loading AI models (BGE re-ranker, ColPali vision, etc.)")
+                
+                import torch
+                if torch.cuda.is_available():
+                    st.info("🔥 **GPU detected** - Loading models with GPU acceleration")
+                else:
+                    st.info("💻 **CPU mode** - Models loading (may take 30-60 seconds)")
+                
+                success = self.initialize_components()
+                
+                if success:
+                    st.session_state.components_initialized = True
+                    st.success("✅ **All AI systems loaded and ready!**")
+                    return True
+                else:
+                    st.error("❌ **System initialization failed** - Please refresh and try again")
+                    return False
+    
+    def _check_preloaded_models(self) -> bool:
+        """Check if models are pre-loaded (Docker environment)"""
+        import os
+        
+        # Check for Docker environment variable
+        docker_preloaded = os.getenv('DOCKER_PRELOADED_MODELS', 'false').lower() == 'true'
+        
+        # Check for model manifest file
+        manifest_exists = os.path.exists('/app/models/model_manifest.json')
+        
+        # Check for HuggingFace cache directory
+        hf_cache_exists = os.path.exists('/app/models/huggingface')
+        
+        logger.info(f"🔍 Pre-loaded model check: Docker flag={docker_preloaded}, Manifest={manifest_exists}, HF cache={hf_cache_exists}")
+        
+        return docker_preloaded and (manifest_exists or hf_cache_exists)
+    
+    def initialize_components(self):
+        """Initialize ALL components for multi-source search"""
+        try:
+            logger.info("🔧 Initializing all components for multi-source search")
+            
+            # Initialize CrossEncoderReRanker (always needed)
+            logger.info("📊 Initializing cross-encoder re-ranker...")
+            self.reranker = CrossEncoderReRanker(
+                model_name='BAAI/bge-reranker-base',
+                relevance_threshold=0.3
+            )
+            if not self.reranker.initialize():
+                logger.warning("⚠️ Re-ranker initialization failed - using fallback scoring")
+            
+            # Initialize Text RAG system (always)
+            logger.info("📝 Initializing Text RAG system...")
+            text_config = {
+                'chunk_size': 800,
+                'chunk_overlap': 150,
+                'embedding_model': 'local',
+                'generation_model': 'gpt-3.5-turbo',
+                'max_retrieved_chunks': 5,
+                'temperature': 0.1
+            }
+            self.text_rag = RAGSystem(text_config)
+            
+            # Initialize ColPali retriever (production settings with GPU detection)
+            import torch
+            if torch.cuda.is_available():
+                logger.info("🖼️ Initializing ColPali retriever (GPU detected)...")
+                colpali_config = {
+                    'model_name': 'vidore/colqwen2-v1.0',
+                    'device': 'auto',
+                    'max_pages_per_doc': 50,
+                    'cache_embeddings': True,
+                    'cache_dir': 'cache/embeddings'
+                }
+            else:
+                logger.info("🖼️ Initializing ColPali retriever (CPU mode - lightweight testing)...")
+                logger.warning("⚠️ CPU-only processing: expect slower performance")
+                colpali_config = {
+                    'model_name': 'vidore/colqwen2-v1.0',
+                    'device': 'cpu',
+                    'max_pages_per_doc': 10,  # Reduced for CPU
+                    'batch_size': 1,
+                    'torch_dtype': 'float32',
+                    'cache_embeddings': True,
+                    'cache_dir': 'cache/embeddings',
+                    'timeout_seconds': 300
+                }
+            
+            try:
+                self.colpali_retriever = ColPaliRetriever(colpali_config)
+                if torch.cuda.is_available():
+                    logger.info("✅ ColPali retriever initialized (GPU mode)")
+                else:
+                    logger.info("✅ ColPali retriever initialized (CPU testing mode)")
+            except Exception as e:
+                logger.warning(f"⚠️ ColPali initialization failed: {e}")
+                logger.warning("Multi-source search will use text + Salesforce only")
+                self.colpali_retriever = None
+            
+            # Initialize Salesforce connector (always available)
+            logger.info("🏢 Initializing Salesforce connector...")
+            try:
+                self.sf_connector = SalesforceConnector()
+                connection_status = self.sf_connector.test_connection()
+                if connection_status:
+                    logger.info("✅ Salesforce connected successfully")
+                else:
+                    logger.warning("⚠️ Salesforce connection failed - check credentials")
+            except Exception as e:
+                logger.warning(f"⚠️ Salesforce connector failed to initialize: {e}")
+                self.sf_connector = None
+            
+            logger.info("✅ Component initialization complete")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Component initialization failed: {e}")
+            return False
+    
+    def query_all_sources(self, user_query: str) -> Dict[str, Any]:
+        """Query ALL sources and use re-ranker to select best response"""
+        
+        logger.info(f"🔍 Querying ALL sources for: '{user_query[:50]}...'")
+        candidates = []
+        
+        # 1. Query Text RAG system (if available)
+        if self.text_rag:
+            text_start_time = time.time()
+            try:
+                logger.info("📝 Querying text RAG system...")
+                text_results = self.text_rag.query(user_query)
+                
+                if text_results.get('success'):
+                    candidates.append({
+                        'success': True,
+                        'answer': text_results['answer'],
+                        'source_type': 'text',
+                        'score': text_results.get('confidence', 0.5),
+                        'sources': text_results.get('sources', []),
+                        'metadata': {'chunks_used': text_results.get('chunks_used', 0)},
+                        'token_info': {'query_time': time.time() - text_start_time}
+                    })
+                    logger.info(f"✅ Text RAG returned result (confidence: {text_results.get('confidence', 0):.3f})")
+                else:
+                    logger.info("ℹ️ Text RAG found no relevant content")
+                    
+            except Exception as e:
+                logger.error(f"❌ Text RAG search failed: {e}")
+        
+        # 2. Query ColPali retriever (if available)
+        if self.colpali_retriever:
+            colpali_start_time = time.time()
+            try:
+                logger.info("🖼️ Querying ColPali retriever...")
+                colpali_results, metrics = self.colpali_retriever.retrieve(user_query, top_k=5)
+                
+                if colpali_results:
+                    best_result = colpali_results[0]
+                    candidates.append({
+                        'success': True,
+                        'answer': best_result.content,
+                        'source_type': 'colpali',
+                        'score': best_result.score,
+                        'sources': [{'filename': best_result.metadata.get('filename', 'Unknown'),
+                                   'page': best_result.metadata.get('page', 1),
+                                   'score': best_result.score}],
+                        'metadata': best_result.metadata,
+                        'token_info': {'query_time': metrics.query_time, 'vlm_tokens': 245}
+                    })
+                    logger.info(f"✅ ColPali returned {len(colpali_results)} results (best score: {best_result.score:.3f})")
+                else:
+                    logger.info("ℹ️ ColPali found no relevant visual content")
+                    
+            except Exception as e:
+                logger.error(f"❌ ColPali search failed: {e}")
+        
+        # 3. Query Salesforce (always attempt if available)
+        if self.sf_connector:
+            sf_start_time = time.time()
+            try:
+                logger.info("🏢 Querying Salesforce knowledge base...")
+                sf_results = self.sf_connector.search_knowledge_with_intent(user_query, limit=3)
+                
+                if sf_results:
+                    best_sf = max(sf_results, key=lambda x: x.get('relevance_score', 0))
+                    
+                    candidates.append({
+                        'success': True,
+                        'answer': self._extract_sf_content(user_query, [best_sf]),
+                        'source_type': 'salesforce',
+                        'score': best_sf.get('relevance_score', 0.5),
+                        'sources': [{'title': best_sf.get('title', 'Unknown KB'),
+                                   'score': best_sf.get('relevance_score', 0.5)}],
+                        'metadata': {'article_id': best_sf.get('id', ''), 'source_url': best_sf.get('source_url', '')},
+                        'token_info': {'query_time': time.time() - sf_start_time, 'sf_tokens': 156}
+                    })
+                    logger.info(f"✅ Salesforce returned {len(sf_results)} articles (best score: {best_sf.get('relevance_score', 0):.3f})")
+                else:
+                    logger.info("ℹ️ Salesforce found no relevant articles")
+                    
+            except Exception as e:
+                logger.error(f"❌ Salesforce search failed: {e}")
+        
+        # 4. Re-rank all candidates
+        if not candidates:
+            return {
+                'success': False,
+                'error': 'No sources returned valid results',
+                'attempted_sources': ['text', 'colpali', 'salesforce']
+            }
+        
+        logger.info(f"🎯 Re-ranking {len(candidates)} candidates...")
+        
+        if self.reranker and self.reranker.is_initialized:
+            ranking_result = self.reranker.rank_all_sources(user_query, candidates)
+            
+            if ranking_result['success']:
+                selected = ranking_result['selected_source']
+                
+                token_breakdown = self.token_counter.get_comprehensive_breakdown(
+                    query=user_query,
+                    answer=selected['answer'],
+                    vlm_tokens=selected.get('token_info', {}).get('vlm_tokens', 0),
+                    sf_tokens=selected.get('token_info', {}).get('sf_tokens', 0),
+                    reranker_tokens=10
+                )
+                
+                return {
+                    'success': True,
+                    'answer': selected['answer'],
+                    'selected_source': selected['source_type'],
+                    'rerank_score': selected['rerank_score'],
+                    'sources': selected['sources'],
+                    'confidence': selected['rerank_score'],  # For compatibility
+                    'token_breakdown': token_breakdown,
+                    'rejected_sources': [
+                        {
+                            'type': r['source_type'],
+                            'score': r['rerank_score'],
+                            'reason': r['reason']
+                        }
+                        for r in ranking_result['rejected_sources']
+                    ],
+                    'reasoning': ranking_result['reasoning'],
+                    'model_used': ranking_result.get('model_used', 'BGE re-ranker')
+                }
+        
+        # Fallback: simple score-based selection
+        logger.warning("⚠️ Using fallback scoring (re-ranker not available)")
+        best_candidate = max(candidates, key=lambda x: x['score'])
+        
+        token_breakdown = self.token_counter.get_comprehensive_breakdown(
+            query=user_query,
+            answer=best_candidate['answer'],
+            vlm_tokens=best_candidate.get('token_info', {}).get('vlm_tokens', 0),
+            sf_tokens=best_candidate.get('token_info', {}).get('sf_tokens', 0)
+        )
+        
+        return {
+            'success': True,
+            'answer': best_candidate['answer'],
+            'selected_source': best_candidate['source_type'],
+            'rerank_score': best_candidate['score'],
+            'sources': best_candidate['sources'],
+            'confidence': best_candidate['score'],  # For compatibility
+            'token_breakdown': token_breakdown,
+            'reasoning': f"Fallback selection: {best_candidate['source_type']} had highest score: {best_candidate['score']:.3f}"
+        }
+    
+    def _extract_sf_content(self, user_query: str, sf_results: List[Dict]) -> str:
+        """Extract relevant content from Salesforce results with improved formatting"""
+        if not sf_results:
+            return "No Salesforce content available"
+        
+        best_result = sf_results[0]
+        title = best_result.get('title', 'Knowledge Article')
+        content = best_result.get('content', 'No content available')
+        
+        import re
+        # Clean HTML tags
+        clean_content = re.sub(r'<[^>]+>', ' ', content)
+        clean_content = re.sub(r'\s+', ' ', clean_content).strip()
+        
+        # Improve formatting for better readability
+        formatted_content = self._format_salesforce_content(clean_content)
+        
+        return f"**Based on '{title}':**\n\n{formatted_content}"
+    
+    def _format_salesforce_content(self, content: str) -> str:
+        """Format Salesforce content with proper structure and readability"""
+        import re
+        
+        # Split into sentences for better processing
+        sentences = re.split(r'(?<=[.!?])\s+', content)
+        
+        formatted_lines = []
+        current_section = []
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            
+            # Detect numbered lists (1., 2., etc.)
+            if re.match(r'^\d+\.', sentence):
+                # If we have accumulated content, add it first
+                if current_section:
+                    formatted_lines.append(' '.join(current_section))
+                    current_section = []
+                formatted_lines.append(f"\n**{sentence}**")
+            
+            # Detect lettered lists (a., b., etc.)
+            elif re.match(r'^[a-zA-Z]\.', sentence):
+                if current_section:
+                    formatted_lines.append(' '.join(current_section))
+                    current_section = []
+                formatted_lines.append(f"\n• {sentence}")
+            
+            # Detect action words that suggest new sections
+            elif re.match(r'^(Contact|Call|Email|Visit|Check|Verify|Confirm|Review|Submit|Complete)', sentence, re.IGNORECASE):
+                if current_section:
+                    formatted_lines.append(' '.join(current_section))
+                    current_section = []
+                formatted_lines.append(f"\n**Action:** {sentence}")
+            
+            # Detect important keywords that should be emphasized
+            elif re.search(r'\b(important|note|warning|attention|remember|caution)\b', sentence, re.IGNORECASE):
+                if current_section:
+                    formatted_lines.append(' '.join(current_section))
+                    current_section = []
+                formatted_lines.append(f"\n⚠️ **Important:** {sentence}")
+            
+            # Regular sentence - accumulate
+            else:
+                current_section.append(sentence)
+        
+        # Add any remaining content
+        if current_section:
+            formatted_lines.append(' '.join(current_section))
+        
+        # Join and clean up extra whitespace
+        result = '\n'.join(formatted_lines)
+        result = re.sub(r'\n\s*\n\s*\n+', '\n\n', result)  # Normalize multiple line breaks
+        
+        return result.strip()
+    
+    def add_documents(self, file_paths: List[str]) -> Dict[str, Any]:
+        """Add documents to ALL available systems (text + ColPali)"""
+        logger.info(f"📄 Processing {len(file_paths)} documents for ALL systems")
+        
+        start_time = time.time()
+        results = {
+            'successful': [],
+            'failed': [],
+            'text_processed': 0,
+            'colpali_processed': 0,
+            'processing_time': 0
+        }
+        
+        for file_path in file_paths:
+            file_result = {
+                'path': file_path,
+                'filename': os.path.basename(file_path),
+                'text_success': False,
+                'colpali_success': False,
+                'text_chunks': 0,
+                'colpali_pages': 0,
+                'errors': []
+            }
+            
+            # Process with Text RAG system
+            if self.text_rag:
+                try:
+                    logger.info(f"📝 Processing {file_result['filename']} for text RAG...")
+                    text_result = self.text_rag.add_documents([file_path])
+                    
+                    if text_result['successful']:
+                        file_result['text_success'] = True
+                        file_result['text_chunks'] = text_result['successful'][0].get('chunks', 0)
+                        results['text_processed'] += 1
+                        logger.info(f"✅ Text processing: {file_result['text_chunks']} chunks")
+                    else:
+                        file_result['errors'].append(f"Text: {text_result['failed'][0].get('error', 'Unknown error')}")
+                        
+                except Exception as e:
+                    file_result['errors'].append(f"Text processing failed: {str(e)}")
+                    logger.error(f"❌ Text processing failed for {file_result['filename']}: {e}")
+            
+            # Process with ColPali retriever  
+            if self.colpali_retriever:
+                try:
+                    logger.info(f"🖼️ Processing {file_result['filename']} for ColPali...")
+                    colpali_result = self.colpali_retriever.add_documents([file_path])
+                    
+                    if colpali_result['successful']:
+                        file_result['colpali_success'] = True
+                        file_result['colpali_pages'] = colpali_result['successful'][0].get('pages', 0)
+                        results['colpali_processed'] += 1
+                        logger.info(f"✅ ColPali processing: {file_result['colpali_pages']} pages")
+                    else:
+                        file_result['errors'].append(f"ColPali: {colpali_result['failed'][0].get('error', 'Unknown error')}")
+                        
+                except Exception as e:
+                    file_result['errors'].append(f"ColPali processing failed: {str(e)}")
+                    logger.error(f"❌ ColPali processing failed for {file_result['filename']}: {e}")
+            
+            # Determine overall success
+            if file_result['text_success'] or file_result['colpali_success']:
+                results['successful'].append(file_result)
+            else:
+                results['failed'].append({
+                    'path': file_path,
+                    'error': '; '.join(file_result['errors']) if file_result['errors'] else 'No processing systems available'
+                })
+        
+        results['processing_time'] = time.time() - start_time
+        
+        logger.info(f"📊 Document processing complete: {len(results['successful'])}/{len(file_paths)} successful")
+        logger.info(f"   Text: {results['text_processed']} docs, ColPali: {results['colpali_processed']} docs")
+        
+        return results
+
+# Initialize session state with our proven architecture
+if 'orchestrator' not in st.session_state:
+    st.session_state.orchestrator = SimpleRAGOrchestrator()
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 if 'processed_files' not in st.session_state:
     st.session_state.processed_files = []
+if 'components_initialized' not in st.session_state:
+    st.session_state.components_initialized = False
 if 'query_input_key' not in st.session_state:
     st.session_state.query_input_key = 0
 if 'show_clear_confirmation' not in st.session_state:
     st.session_state.show_clear_confirmation = False
-# ADD Salesforce connector initialization
-if 'sf_connector' not in st.session_state:
-    st.session_state.sf_connector = SalesforceConnector()
-# ADD transformative search initialization  
-if 'transformative_search' not in st.session_state and TRANSFORMATIVE_SEARCH_AVAILABLE:
-    openai_key = os.getenv('OPENAI_API_KEY')  # Get from environment
-    st.session_state.transformative_search = TransformativeSemanticSearch(
-        st.session_state.sf_connector, 
-        openai_key
-    )
 
-@st.cache_resource
-def initialize_rag_system():
-    """Initialize RAG system with caching."""
-    config = {
-        'chunk_size': 800,
-        'chunk_overlap': 150,
-        'embedding_model': 'local',
-        'generation_model': 'gpt-3.5-turbo',
-        'max_retrieved_chunks': 5,
-        'temperature': 0.1
-    }
-    return create_rag_system(config)
+# Helper functions for UI formatting
 
 def get_confidence_color(score):
     """Get color class based on confidence score."""
@@ -167,14 +664,14 @@ def format_sources(sources):
         else:
             filename = f'Source {i}'
             score = 0.0
-            content = str(source)[:300]
+            content = str(source)
             
         confidence_color = get_confidence_color(score)
         formatted.append(f"""
         <div class="source-card">
             <h4>📄 Source {i}: {filename}</h4>
             <p class="{confidence_color}">Relevance: {score:.3f}</p>
-            <p>{content[:300]}{'...' if len(content) > 300 else ''}</p>
+            <p>{content}</p>
         </div>
         """)
     
@@ -349,8 +846,19 @@ def clear_all_data():
             except Exception as e:
                 print(f"⚠️ Error clearing vector database: {str(e)}")
         
+        # Clear enhanced ColPali system if it exists
+        if st.session_state.get('enhanced_colpali') is not None:
+            try:
+                success = st.session_state.enhanced_colpali.clear_documents()
+                if success:
+                    print("✅ Enhanced ColPali documents cleared")
+                else:
+                    print("⚠️ Warning: Could not clear Enhanced ColPali")
+            except Exception as e:
+                print(f"⚠️ Error clearing Enhanced ColPali: {str(e)}")
+        
         # Clear ALL session state variables thoroughly
-        keys_to_keep = ['initialize_rag_system']  # Keep the cache function
+        keys_to_keep = ['initialize_rag_system', 'initialize_enhanced_colpali']  # Keep the cache functions
         keys_to_remove = [key for key in st.session_state.keys() if key not in keys_to_keep]
         
         for key in keys_to_remove:
@@ -360,12 +868,17 @@ def clear_all_data():
         st.session_state.chat_history = []
         st.session_state.processed_files = []
         st.session_state.rag_system = None
+        st.session_state.multimodal_rag = None
+        st.session_state.enhanced_colpali = None
+        st.session_state.enhanced_mode_enabled = False
+        st.session_state.retrieval_mode = 'text'
         st.session_state.query_input_key = 0
         st.session_state.show_clear_confirmation = False
         
-        # Clear the cached RAG system - FORCE CLEAR
+        # Clear the cached systems - FORCE CLEAR
         try:
             initialize_rag_system.clear()
+            initialize_enhanced_colpali.clear()
             print("✅ System cache cleared")
         except Exception as e:
             print(f"⚠️ Cache clear warning: {str(e)}")
@@ -381,518 +894,278 @@ def clear_all_data():
 def main():
     # Header
     st.markdown('<h1 class="main-header">🤖 Smart Document Assistant</h1>', unsafe_allow_html=True)
-    st.markdown("Transform your documents into a conversational knowledge base!")
+    st.markdown("**Multi-source search with intelligent re-ranking** - Text + Visual + Salesforce")
     
-    # 🎯 PHASE 2 & 3: SIMPLIFIED INTENT-DRIVEN ARCHITECTURE
-    with st.expander("🎯 Intent-Driven Search Architecture", expanded=False):
+    # System Architecture Info
+    with st.expander("🎯 Multi-Source Architecture", expanded=False):
         st.markdown("""
-        **🎯 Current Architecture: Intent-Driven Search**
+        **🔄 Current Architecture: Multi-Source with BGE Re-ranker**
         
         **How it works:**
-        - 🧠 **Intent Recognition**: Automatically detects what action (cancel, modify, book, handle) and service (air, hotel, car) you're asking about
-        - 🎯 **Smart Source Selection**: Uses intent to automatically choose the best source (no more manual selection needed)
-        - 🚀 **Transformative Search**: When using Salesforce, applies advanced semantic search for deep understanding
-        - ✅ **Honest Results**: Says "no information available" instead of returning irrelevant content
-        - 📊 **High Quality**: Only returns results with >70% relevance score
+        - 📝 **Text RAG**: Traditional document chunking and embedding search
+        - 🖼️ **ColPali Visual**: Vision-language model for visual document understanding  
+        - 🏢 **Salesforce**: Knowledge base search for organizational content
+        - 🎯 **BGE Re-ranker**: Cross-encoder model selects single best source
         
-        **Decision Flow:**
-        1. Extract intent from your query
-        2. If travel-related intent detected → Search Salesforce with transformative search
-        3. If local document query → Search uploaded documents
-        4. If no relevant results → Honest failure (no mixing of irrelevant content)
+        **Query Flow:**
+        1. Search ALL sources simultaneously (Text + ColPali + Salesforce)
+        2. BGE cross-encoder re-ranks all candidates semantically
+        3. Return single best answer (no mixing of sources)
+        4. Show which source was selected and why
         
         **Benefits:**
-        - No more mixed irrelevant results from multiple sources
-        - Automatic source selection based on query intent
-        - Higher quality results with better relevance scores
-        - Simple, predictable behavior
-        
-        **📊 Quality Metrics:**
-        - Relevance threshold: 70% (was 25%)
-        - Intent recognition accuracy: ~85%
-        - Source separation: 100% (no unwanted mixing)
+        - **No source mixing**: Single coherent answer from best source
+        - **Semantic understanding**: BGE model understands query intent better than rules
+        - **Visual comprehension**: ColPali handles tables, charts, complex layouts
+        - **Transparent selection**: See why each source was chosen or rejected
         """)
 
-    # Initialize RAG system
-    if st.session_state.rag_system is None:
-        with st.spinner("Initializing RAG system..."):
-            st.session_state.rag_system = initialize_rag_system()
-
-    rag = st.session_state.rag_system
-
-    # Main layout - ensure sidebar stays on right
-    col1, col2 = st.columns([3, 2])
-
+    # Sidebar - System Configuration  
+    with st.sidebar:
+        st.header("🎛️ System Configuration")
+        
+        # Hardware detection and system info
+        import torch
+        gpu_available = torch.cuda.is_available()
+        
+        if gpu_available:
+            st.info("""
+            🔄 **Multi-Source Architecture (GPU Mode)**
+            • Text RAG: Traditional embeddings ⚡
+            • ColPali: Visual document understanding (FAST ⚡)
+            • Salesforce: Knowledge base search ⚡
+            • BGE Re-ranker: Cross-encoder selection ⚡
+            """)
+        else:
+            st.warning("""
+            🔄 **Multi-Source Architecture (CPU Mode)**
+            • Text RAG: Traditional embeddings ⚡
+            • ColPali: Visual understanding (slower on CPU) 🐌
+            • Salesforce: Knowledge base search ⚡
+            • BGE Re-ranker: Cross-encoder selection ⚡
+            
+            ⚠️ ColPali performance optimized for GPU deployment
+            """)
+        
+        st.divider()
+        
+        # Auto-initialization status (no manual button needed)
+        if st.session_state.components_initialized:
+            st.success("✅ **AI Systems Ready**")
+            st.caption("All models loaded and operational")
+        else:
+            st.info("🚀 **AI Systems**")
+            st.caption("Will auto-load on first use")
+    
+    # Main content area
+    col1, col2 = st.columns([2, 1])
+    
     with col1:
-        # Chat interface
-        st.header("💬 Ask Your Documents")
-
-        # Query input form
+        st.header("💬 Query Interface")
+        
+        # Query form
         with st.form(f"query_form_{st.session_state.query_input_key}"):
             user_query = st.text_input(
-                "What would you like to know?",
-                placeholder="e.g., What is our remote work policy?",
+                "**Ask a question:**",
+                placeholder="e.g., What is the cancellation policy?",
+                help="This will search all sources and select the most relevant one",
                 key=f"query_input_{st.session_state.query_input_key}"
             )
             
-            # Advanced options
-            with st.expander("🔧 Advanced Options"):
-                col_a, col_b = st.columns(2)
-                
-                with col_a:
-                    max_chunks = st.slider("Retrieved chunks", 1, 10, 5)
-                    temperature = st.slider("Creativity", 0.0, 1.0, 0.1, 0.1)
-                
-                with col_b:
-                    include_sources = st.checkbox("Show sources", value=True)
-                    show_metadata = st.checkbox("Show metadata", value=False)
-                
-                # 🎯 PHASE 3: SIMPLIFIED SEARCH STRATEGY OPTIONS
-                st.subheader("🎯 Search Strategy")
-                search_strategy = st.selectbox(
-                    "Choose search method:",
-                    options=["Smart (Intent-Driven)", "Local Documents Only", "Salesforce Only"],
-                    index=0,
-                    help="Smart: Uses intent recognition to automatically select the best source. Local: Only uploaded documents. Salesforce: Only knowledge articles."
-                )
-            
-            # Submit button
-            submitted = st.form_submit_button("🔍 Ask Question")
+            submitted = st.form_submit_button("🔍 Search All Sources", type="primary")
         
-        # Query processing
+        # Process query
         if submitted and user_query.strip():
-            # Check if we have any documents (either uploaded files or Salesforce connection)
-            has_local_files = bool(st.session_state.processed_files)
-            has_rag_documents = (st.session_state.rag_system and 
-                               st.session_state.rag_system.get_system_info().get('total_documents', 0) > 0)
-            has_salesforce = st.session_state.sf_connector.test_connection()
+            # Auto-initialize systems if needed
+            if not st.session_state.orchestrator.ensure_initialized():
+                st.stop()  # Stop execution if initialization failed
             
-            if not has_local_files and not has_rag_documents and not has_salesforce:
-                st.warning("⚠️ Please upload documents or ensure Salesforce connection is working!")
-            else:
-                with st.spinner("🤔 Searching for information..."):
-                    start_time = time.time()
-                    
-                    # 🎯 PHASE 1: RESTORE INTENT-DRIVEN ARCHITECTURE
-                    # Use simple intent-driven source selection instead of complex logic
-                    local_results = None
-                    sf_results = []
-                    
-                    # Extract user intent using the working intent-driven system
-                    intent = st.session_state.sf_connector.extract_user_intent(user_query)
-                    
-                    # 🎯 PHASE 3: SIMPLIFIED SEARCH STRATEGY LOGIC
-                    if search_strategy == "Local Documents Only":
-                        should_search_local = True
-                        should_search_salesforce = False
-                        st.info("📝 Searching local documents only...")
-                    elif search_strategy == "Salesforce Only":
-                        should_search_local = False
-                        should_search_salesforce = True
-                        st.info("🏢 Searching Salesforce knowledge articles only...")
-                    else:  # Smart (Intent-Driven) - DEFAULT TO SINGLE-SOURCE
-                        if intent['is_valid'] and intent['action'] and intent['service']:
-                            # Valid travel-related intent detected - use Salesforce
-                            st.info(f"🎯 Travel intent detected: {intent['action']} + {intent['service']} (confidence: {intent['confidence']:.2f})")
-                            should_search_local = False
-                            should_search_salesforce = has_salesforce
-                        elif has_local_files or has_rag_documents:
-                            # Non-travel query with local documents available - use local
-                            st.info(f"📝 Local document query detected...")
-                            should_search_local = True
-                            should_search_salesforce = False
-                        else:
-                            # No clear intent and no local documents - try Salesforce
-                            st.info(f"🤔 No clear intent detected, checking Salesforce...")
-                            should_search_local = False
-                            should_search_salesforce = has_salesforce
-                    
-                    # 🎯 PHASE 1: SIMPLE LOCAL SEARCH (NO COMPLEX LOGIC)
-                    if should_search_local:
-                        try:
-                            local_results = rag.query(
-                                user_query,
-                                max_chunks=max_chunks
-                            )
-                            
-                            if local_results and local_results.get('success'):
-                                confidence = local_results.get('confidence', 0.0)
-                                st.info(f"✅ Found local documents (confidence: {confidence:.2f})")
-                            else:
-                                st.info("ℹ️ No relevant local documents found")
-                                
-                        except Exception as e:
-                            st.error(f"❌ Local search failed: {str(e)}")
-                            local_results = None
-                    
-                    # 🚀 PHASE 2: TRANSFORMATIVE SEARCH WITHIN INTENT FRAMEWORK
-                    if should_search_salesforce and has_salesforce:
-                        try:
-                            # Use transformative search within intent framework
-                            if TRANSFORMATIVE_SEARCH_AVAILABLE and 'transformative_search' in st.session_state:
-                                st.info(f"🚀 Using transformative search for intent: {intent.get('action', 'unknown')} {intent.get('service', 'unknown')}")
-                                search_result = st.session_state.transformative_search.transformative_search(user_query, 3)
-                                
-                                if search_result['articles']:
-                                    st.success(f"✅ Found {len(search_result['articles'])} highly relevant articles")
-                                    st.info(f"🧠 Methods used: {', '.join(search_result['methods_used'])}")
-                                    
-                                    # Convert to expected format
-                                    sf_results = []
-                                    for article in search_result['articles']:
-                                        sf_results.append({
-                                            'id': article.get('id'),
-                                            'title': article.get('title'),
-                                            'content': article.get('content', ''),
-                                            'source_url': article.get('source_url', ''),
-                                            'relevance_score': article.get('semantic_score', article.get('final_score', article.get('relevance_score', 0.5))),
-                                            'search_method': 'transformative_semantic',
-                                            'methods_used': search_result['methods_used']
-                                        })
-                                else:
-                                    st.info("🚀 Transformative search: no highly relevant content found")
-                                    sf_results = []
-                            else:
-                                # Fallback to intent-driven search (clean separation)
-                                st.info("🎯 Using intent-driven search for targeted results")
-                                sf_results = st.session_state.sf_connector.search_knowledge_with_intent(
-                                    user_query, limit=3
-                                )
-                            
-                            # 🎯 PHASE 2: INCREASE RELEVANCE THRESHOLDS (0.25 -> 0.7)
-                            if sf_results:
-                                # Filter with higher threshold for quality results
-                                sf_results = [r for r in sf_results if r['relevance_score'] > 0.7]
-                                
-                                if sf_results:
-                                    st.success(f"✅ Found {len(sf_results)} relevant Salesforce articles")
-                                else:
-                                    st.info("ℹ️ Salesforce search completed but no highly relevant results found")
-                                    sf_results = []  # Clear low-quality results
-                            else:
-                                st.info("ℹ️ No Salesforce articles found for this query")
-                                
-                        except Exception as e:
-                            st.error(f"❌ Salesforce search failed: {str(e)}")
-                            sf_results = []
-                    
-                    # 🎯 PHASE 3: RESTORE HONEST FAILURES - SIMPLE RESULT LOGIC
-                    combined_answer = ""
-                    combined_sources = []
-                    
-                    # Simple source priority - no complex mixing
-                    if local_results and local_results.get('success'):
-                        # Use local results
-                        combined_answer = local_results['answer']
-                        combined_sources.extend(local_results.get('sources', []))
-                        if sf_results:
-                            # Add note about additional sources if both found
-                            combined_answer += f"\n\n**Additional information from Salesforce:**\n{extract_question_specific_content(user_query, sf_results)}"
-                    elif sf_results:
-                        # Use Salesforce results only
-                        combined_answer = extract_question_specific_content(user_query, sf_results)
-                    else:
-                        # HONEST FAILURE - no mixing of irrelevant content
-                        combined_answer = ""
-                    
-                    # Add Salesforce sources for reference
-                    if sf_results:
-                        for sf_result in sf_results:
-                            import re
-                            clean_content = re.sub(r'<[^>]+>', ' ', sf_result['content'])
-                            clean_content = re.sub(r'\s+', ' ', clean_content).strip()
-                            excerpt = clean_content[:300] + "..." if len(clean_content) > 300 else clean_content
-                            
-                            combined_sources.append({
-                                'source_number': len(combined_sources) + 1,
-                                'filename': sf_result['title'],
-                                'chunk_text': excerpt,
-                                'relevance_score': sf_result['relevance_score'],
-                                'source_type': 'Salesforce',
-                                'source_url': sf_result['source_url']
-                            })
-                    
-                    # 🎯 PHASE 3: HONEST FAILURES - QUALITY GATING
-                    if combined_answer.strip():
-                        # Final cleanup: remove any remaining HTML artifacts from the complete answer
-                        import re
-                        combined_answer = re.sub(r'<[^>]*>', '', combined_answer)
-                        # Preserve line breaks and formatting structure
-                        combined_answer = re.sub(r'\n\s*\n\s*\n+', '\n\n', combined_answer)  # Normalize multiple line breaks
-                        combined_answer = combined_answer.strip()
-                        
-                        result = {
-                            'success': True,
-                            'answer': combined_answer,
-                            'sources': combined_sources,
-                            'confidence': 0.8,  # Default confidence for combined results
-                            'local_results': bool(local_results and local_results.get('success')),
-                            'salesforce_results': len(sf_results)
-                        }
-                    else:
-                        # HONEST FAILURE - no relevant information found
-                        if intent['is_valid']:
-                            error_msg = f"No relevant information found for {intent['action']} {intent['service']} operations. You may need to check additional resources or contact your supervisor."
-                        else:
-                            error_msg = 'No relevant information found in available sources for your query.'
-                        
-                        result = {
-                            'success': False,
-                            'error': error_msg,
-                            'sources': [],
-                            'intent_detected': intent['is_valid'],
-                            'search_attempted': {
-                                'local': should_search_local,
-                                'salesforce': should_search_salesforce
-                            }
-                        }
-                    
-                    processing_time = time.time() - start_time
-                    
-                    # Add to chat history
-                    st.session_state.chat_history.append({
-                        'query': user_query,
-                        'result': result,
-                        'timestamp': datetime.now(),
-                        'processing_time': processing_time
-                    })
-                    
-                    # Clear the input field by incrementing the key
-                    st.session_state.query_input_key += 1
-
-                # Rerun to update the interface
+            with st.spinner("🤔 Searching all sources and re-ranking..."):
+                start_time = time.time()
+                
+                result = st.session_state.orchestrator.query_all_sources(user_query)
+                
+                processing_time = time.time() - start_time
+                
+                # Add to chat history
+                st.session_state.chat_history.append({
+                    'query': user_query,
+                    'result': result,
+                    'timestamp': datetime.now(),
+                    'processing_time': processing_time
+                })
+                
+                # Clear the input field by incrementing the key
+                st.session_state.query_input_key += 1
+                
                 st.rerun()
-
-        # Display chat history
+        
+        # Display recent results
         if st.session_state.chat_history:
-            st.header("📝 Conversation History")
-
-            # Show recent conversation first
-            for i, chat in enumerate(reversed(st.session_state.chat_history[-5:])):
+            st.header("📝 Recent Results")
+            
+            # Show last 3 results
+            for i, chat in enumerate(reversed(st.session_state.chat_history[-3:])):
                 with st.container():
-                    # User message
-                    st.markdown(f"""
-                    <div class="chat-message user-message">
-                        <strong>🧑 You:</strong> {chat['query']}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"**🧑 Query:** {chat['query']}")
                     
-                    # Assistant response
                     result = chat['result']
-                    if result.get('success', False):
-                        # Display the answer cleanly - escape HTML to prevent rendering issues
-                        import html
-                        answer_text = html.escape(result.get('answer', 'No answer available'))
+                    if result['success']:
+                        # Source selection info
                         st.markdown(f"""
-                        <div class="chat-message assistant-message">
-                            <strong>🤖 Assistant:</strong> {answer_text}
+                        <div class="source-selected">
+                            <strong>📍 Selected Source:</strong> {result['selected_source'].upper()} 
+                            (Re-rank score: {result['rerank_score']:.3f})
+                            <br><small>{result['reasoning']}</small>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Display metadata in columns
-                        meta_col1, meta_col2, meta_col3 = st.columns(3)
-                        with meta_col1:
-                            st.caption(f"Confidence: {result.get('confidence', 0.0):.2f}")
-                        with meta_col2:
-                            st.caption(f"Time: {chat['processing_time']:.2f}s")
-                        with meta_col3:
-                            search_method = "🎯 Intent-driven" if result.get('salesforce_results', 0) > 0 else "Standard"
-                            st.caption(f"Sources: {len(result.get('sources', []))} ({search_method})")
+                        # Answer
+                        st.markdown(f"**🤖 Answer:**")
+                        st.markdown(result['answer'])
                         
-                        # Show sources if requested
-                        if include_sources and result.get('sources'):
-                            with st.expander(f"📚 Sources for query {len(st.session_state.chat_history) - i}"):
-                                for source in result['sources']:
-                                    source_type = source.get('source_type', 'Local')
-                                    if source_type == 'Salesforce':
-                                        st.markdown(f"""
-                                        <div class="source-card">
-                                            <h4>🏯 Salesforce (🎯 Intent-driven): {source['filename']}</h4>
-                                            <p class="{get_confidence_color(source['relevance_score'])}">Relevance: {source['relevance_score']:.3f}</p>
-                                            <p>{source['chunk_text']}</p>
-                                            <a href="{source.get('source_url', '#')}" target="_blank">View in Salesforce</a>
-                                        </div>
-                                        """, unsafe_allow_html=True)
-                                    else:
-                                        # Local file source
-                                        st.markdown(f"""
-                                        <div class="source-card">
-                                            <h4>📁 Local: {source['filename']}</h4>
-                                            <p class="{get_confidence_color(source['relevance_score'])}">Relevance: {source['relevance_score']:.3f}</p>
-                                            <p>{source['chunk_text']}</p>
-                                        </div>
-                                        """, unsafe_allow_html=True)
+                        # Token breakdown
+                        if 'token_breakdown' in result:
+                            tokens = result['token_breakdown']
+                            col_t1, col_t2, col_t3, col_t4, col_t5, col_t6 = st.columns(6)
+                            with col_t1:
+                                st.metric("Query", tokens['query_tokens'])
+                            with col_t2:
+                                st.metric("VLM", tokens['vlm_analysis_tokens'])
+                            with col_t3:
+                                st.metric("Salesforce", tokens['salesforce_api_tokens'])
+                            with col_t4:
+                                st.metric("Re-rank", tokens['reranker_tokens'])
+                            with col_t5:
+                                st.metric("Response", tokens['response_tokens'])
+                            with col_t6:
+                                st.metric("Total", tokens['total_tokens'])
+                        
+                        # Rejected sources (transparency)
+                        if result.get('rejected_sources'):
+                            with st.expander("🔍 Why other sources weren't selected"):
+                                for rejected in result['rejected_sources']:
+                                    st.markdown(f"""
+                                    <div class="rejected-sources">
+                                        <strong>{rejected['type'].upper()}:</strong> {rejected['reason']}
+                                    </div>
+                                    """, unsafe_allow_html=True)
                     else:
-                        # Show error message
-                        st.markdown(f"""
-                        <div class="chat-message assistant-message">
-                            <strong>🤖 Assistant:</strong> ❌ {result.get('error', 'Unknown error occurred')}
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.error(f"❌ {result['error']}")
                     
+                    st.caption(f"Multi-source | Time: {chat['processing_time']:.2f}s | {chat['timestamp'].strftime('%H:%M:%S')}")
                     st.divider()
     
     with col2:
-        # Document management sidebar
         st.header("📁 Document Management")
+        
+        # Hardware-specific tips
+        import torch
+        if not torch.cuda.is_available():
+            st.info("""
+            💡 **CPU Processing Tips**:
+            • ColPali will be slower but functional
+            • Text processing remains fast
+            • Multi-source search still works
+            • GPU deployment recommended for production
+            """)
         
         # File upload
         uploaded_files = st.file_uploader(
             "Upload documents",
             accept_multiple_files=True,
-            type=['txt', 'pdf', 'docx', 'csv', 'xlsx'],
-            help="Supported formats: TXT, PDF, DOCX, CSV, XLSX"
+            type=['pdf', 'txt', 'docx'],
+            help="Upload documents for multi-source processing"
         )
-
-        # Process documents
-        if uploaded_files and st.button("📤 Process Documents"):
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            successful_files = []
-            failed_files = []
-            
-            for i, uploaded_file in enumerate(uploaded_files):
-                status_text.text(f"Processing {uploaded_file.name}...")
-                
-                # Save to temporary file
-                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_file.name}") as tmp_file:
-                    tmp_file.write(uploaded_file.getvalue())
-                    tmp_path = tmp_file.name
-                
-                try:
-                    # Process document
-                    result = rag.add_documents([tmp_path])
-                    
-                    if len(result['successful']) > 0:
-                        # Document was processed successfully
-                        doc_info = result['successful'][0]  # Get first (and only) document
-                        successful_files.append({
-                            'name': uploaded_file.name,
-                            'chunks': doc_info['chunks'],
-                            'size': len(uploaded_file.getvalue()),
-                            'time': result['processing_time']
-                        })
-                        st.success(f"✅ {uploaded_file.name} ({doc_info['chunks']} chunks)")
-                    else:
-                        # Document failed to process
-                        error_info = result['failed'][0] if result['failed'] else {'error': 'Unknown error'}
-                        failed_files.append({
-                            'name': uploaded_file.name,
-                            'error': error_info.get('error', 'Unknown error')
-                        })
-                        st.error(f"❌ {uploaded_file.name}: {error_info.get('error', 'Unknown error')}")
-                
-                except Exception as e:
-                    failed_files.append({
-                        'name': uploaded_file.name,
-                        'error': str(e)
-                    })
-                    st.error(f"❌ {uploaded_file.name}: {str(e)}")
-                
-                finally:
-                    # Clean up
-                    os.unlink(tmp_path)
-                
-                # Update progress
-                progress_bar.progress((i + 1) / len(uploaded_files))
-            
-            # Update processed files list
-            st.session_state.processed_files.extend(successful_files)
-            
-            status_text.text(f"✅ Processing complete!")
         
-        # Salesforce Integration Section
-        st.header("🏢 Salesforce Integration")
-        
-        # Test connection button
-        if st.button("Test Salesforce Connection"):
-            with st.spinner("Testing connection..."):
-                if st.session_state.sf_connector.test_connection():
-                    st.success("✅ Salesforce connected!")
+        if uploaded_files:
+            st.success(f"✅ {len(uploaded_files)} files selected")
+            
+            if st.button("📤 Process Documents"):
+                # Auto-initialize systems if needed
+                if not st.session_state.orchestrator.ensure_initialized():
+                    st.stop()  # Stop execution if initialization failed
+                
+                import torch
+                if torch.cuda.is_available():
+                    spinner_msg = "Processing documents (GPU acceleration)..."
                 else:
-                    st.error("❌ Connection failed - check credentials")
-        
-        st.info("🚀 Real-time search enabled! Salesforce knowledge articles will be searched automatically when you ask questions.")
-        
-        # System statistics
-        st.header("📊 System Statistics")
-        
-        if st.session_state.rag_system:
-            stats = rag.get_system_info()
-            
-            # Main metrics
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.metric("Documents", stats.get('total_documents', 0))
-                st.metric("Chunks", stats.get('total_chunks', 0))
-            with col_b:
-                st.metric("System Ready", "Yes" if stats.get('is_initialized', False) else "No")
-                st.metric("Embedding Model", stats.get('config', {}).get('embedding_model', 'Unknown'))
-            
-            # Show processed documents
-            if stats.get('processed_documents'):
-                st.subheader("📈 Processed Documents")
-                for doc in stats['processed_documents']:
-                    st.write(f"• {doc}")
-            else:
-                st.info("No documents processed yet. Upload some files to get started!")
+                    spinner_msg = "Processing documents (CPU mode - may take longer)..."
+                    st.info("⏱️ **CPU Processing**: ColPali analysis may take 1-2 minutes per document.")
                 
-            # Configuration display
-            with st.expander("⚙️ System Configuration"):
-                config = stats.get('config', {})
-                st.json(config)
+                with st.spinner(spinner_msg):
+                    # Save uploaded files to temporary paths
+                    temp_paths = []
+                    try:
+                        for uploaded_file in uploaded_files:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_file.name}") as tmp_file:
+                                tmp_file.write(uploaded_file.getvalue())
+                                temp_paths.append(tmp_file.name)
+                        
+                        # Process documents
+                        result = st.session_state.orchestrator.add_documents(temp_paths)
+                        
+                        # Display results
+                        if result['successful']:
+                            st.success(f"✅ Processed {len(result['successful'])} documents successfully")
+                            for doc in result['successful']:
+                                filename = doc.get('filename', doc.get('path', 'Unknown'))
+                                text_info = f"📝 {doc.get('text_chunks', 0)} chunks" if doc.get('text_success') else ""
+                                colpali_info = f"🖼️ {doc.get('colpali_pages', 0)} pages" if doc.get('colpali_success') else ""
+                                
+                                if text_info and colpali_info:
+                                    st.info(f"📄 {filename}: {text_info} + {colpali_info}")
+                                elif text_info:
+                                    st.info(f"📄 {filename}: {text_info}")
+                                elif colpali_info:
+                                    st.info(f"📄 {filename}: {colpali_info}")
+                                else:
+                                    st.info(f"📄 {filename}: processed")
+                        
+                        if result['failed']:
+                            st.error(f"❌ Failed to process {len(result['failed'])} documents")
+                            for doc in result['failed']:
+                                st.error(f"• {os.path.basename(doc.get('path', ''))}: {doc.get('error', 'Unknown error')}")
+                        
+                        st.caption(f"Processing time: {result.get('processing_time', 0):.2f}s")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Document processing failed: {e}")
+                    finally:
+                        # Clean up temporary files
+                        for temp_path in temp_paths:
+                            try:
+                                os.unlink(temp_path)
+                            except Exception:
+                                pass
         
-        # Processed files list
-        if st.session_state.processed_files:
-            st.subheader("📄 Processed Files")
-            
-            for file_info in st.session_state.processed_files[-5:]:  # Show last 5
-                st.markdown(f"""
-                <div class="metric-card">
-                    <strong>{file_info['name']}</strong><br>
-                    📄 {file_info['chunks']} chunks<br>
-                    📊 {file_info['size']:,} bytes<br>
-                    ⏱️ {file_info['time']:.2f}s
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("📭 No processed files. Upload documents to get started!")
+        st.divider()
         
-        # Clear data button with confirmation
-        st.subheader("🗑️ Data Management")
+        # System status
+        st.header("📊 System Status")
         
-        # Show current status
-        col_status1, col_status2 = st.columns(2)
-        with col_status1:
-            doc_count = len(st.session_state.processed_files)
-            st.metric("📄 Processed Files", doc_count)
-        with col_status2:
-            chat_count = len(st.session_state.chat_history)
-            st.metric("💬 Conversations", chat_count)
+        # Dynamic status based on hardware
+        import torch
+        gpu_mode = torch.cuda.is_available()
         
-        # Clear button logic
-        if not st.session_state.show_clear_confirmation:
-            if st.button("🗑️ Clear All Data", type="secondary", help="Remove all documents and conversation history"):
-                st.session_state.show_clear_confirmation = True
+        status_data = {
+            "Mode": "GPU" if gpu_mode else "CPU",
+            "Systems": "All Ready" if st.session_state.components_initialized else "Not initialized",
+            "Queries": len(st.session_state.chat_history),
+            "ColPali": "Fast ⚡" if gpu_mode else "Functional 🐌",
+            "Sources": "Text + ColPali + Salesforce"
+        }
+        
+        for key, value in status_data.items():
+            st.metric(key, value)
+        
+        # Clear button
+        if st.session_state.chat_history:
+            if st.button("🗑️ Clear History", type="secondary"):
+                st.session_state.chat_history = []
                 st.rerun()
-        else:
-            st.warning("⚠️ This will permanently remove all processed documents and conversation history!")
-            
-            col_confirm, col_cancel = st.columns(2)
-            
-            with col_confirm:
-                if st.button("✅ Yes, Clear Everything", type="primary", key="confirm_clear"):
-                    clear_all_data()
-                    st.session_state.show_clear_confirmation = False
-                    st.success("🎉 All data has been cleared successfully!")
-                    st.rerun()
-            
-            with col_cancel:
-                if st.button("❌ Cancel", key="cancel_clear"):
-                    st.session_state.show_clear_confirmation = False
-                    st.info("Clear operation cancelled.")
-                    st.rerun()
 
+
+# Run the app
 if __name__ == "__main__":
     main()

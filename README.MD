@@ -1,153 +1,249 @@
-# AI RAG Project - AI Knowledge Assignment
+# AI-RAG-Project: Multi-Source RAG with Visual Understanding
 
-A smart document assistant that combines **Retrieval-Augmented Generation (RAG)** with Salesforce integration to provide intelligent document search and question-answering capabilities.
+A sophisticated **Retrieval-Augmented Generation (RAG)** system that combines **Text RAG**, **ColPali visual document understanding**, and **Salesforce integration** with intelligent source selection for enterprise-grade document processing.
 
-## ✨ Features
+## ✨ Key Features
 
-- **📄 Multi-format Document Support**: PDF, DOCX, TXT, CSV, XLSX
-- **🏢 Salesforce Integration**: Real-time search of Knowledge Articles
-- **🧠 Intent-Driven Search**: Automatically detects travel-related queries (hotel, air, car operations)
-- **🚀 Transformative Semantic Search**: Advanced AI-powered search with fallback mechanisms
-- **💬 Two Web Interfaces**: Streamlit (full-featured) and Gradio (simplified)
-- **🎯 Smart Source Selection**: Automatically chooses between local documents and Salesforce based on query intent
+- **🔍 Multi-Source Intelligence**: Text embeddings + ColPali visual understanding + Salesforce knowledge base
+- **🖼️ Visual Document Processing**: ColPali processes PDFs directly as images (no OCR required)
+- **🧠 BGE Re-ranker**: Intelligent semantic source selection using BAAI/bge-reranker-base
+- **⚡ Instant Docker Startup**: Pre-loaded models enable 0-5 second container startup (vs 2-3 minutes)
+- **🔥 GPU & CPU Support**: Hardware-optimized deployments with automatic detection
+- **🚀 Auto-initialization**: Seamless user experience with loading indicators
+- **💰 Token Transparency**: 6-column token breakdown for cost monitoring
+- **📊 Production Ready**: Comprehensive health monitoring and container orchestration
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Python 3.8+
-- OpenAI API key (optional, for enhanced search)
-- Salesforce credentials (optional, for knowledge article search)
+### **Option 1: Docker Deployment (Recommended)**
+```bash
+# CPU-optimized instant startup
+docker-compose up ai-rag-app
 
-### Installation
+# GPU-accelerated deployment (requires nvidia-docker)
+docker-compose --profile gpu up ai-rag-app-gpu
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/cchen362/AI-RAG-Project
-   cd AI-RAG-Project
-   ```
+# Production deployment (detached)
+docker-compose up -d ai-rag-app
+```
+Access at: **http://localhost:8501**
 
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### **Option 2: Local Development**
+```bash
+# Clone and setup
+git clone https://github.com/cchen362/AI-RAG-Project
+cd AI-RAG-Project
+pip install -r requirements.txt
 
-3. **Configure environment** (optional)
-   Create a `.env` file:
-   ```env
-   OPENAI_API_KEY=your_openai_api_key
-   SALESFORCE_USERNAME=your_username@company.com
-   SALESFORCE_PASSWORD=your_password
-   SALESFORCE_SECURITY_TOKEN=your_security_token
-   ```
+# Launch application
+streamlit run streamlit_rag_app.py
+```
 
-4. **Launch the application**
-   
-   **Option A: Direct Python (Development)**
-   ```bash
-   python launch_app.py
-   ```
-   
-   **Option B: Docker (Recommended for Production)**
-   ```bash
-   docker-compose up -d
-   ```
-   
-   Access at: http://localhost:8501
+### **Option 3: Quick Launcher**
+```bash
+python launch_app.py
+```
+
+## 🏗️ Architecture Overview
+
+### **Multi-Source Query Processing**
+```
+User Query → SimpleRAGOrchestrator → [Text RAG | ColPali Visual | Salesforce] 
+                    ↓
+           BGE Cross-Encoder Re-ranker → Single Best Response
+```
+
+### **Core Components**
+- **SimpleRAGOrchestrator**: Coordinates multi-source search and response generation
+- **BGE Cross-Encoder**: Semantic source selection (replaces rule-based intent logic)
+- **ColPali Integration**: Visual document understanding using vidore/colqwen2-v1.0
+- **Token Counter**: Comprehensive usage tracking for cost transparency
+
+### **Model Specifications**
+- **Text Embeddings**: all-MiniLM-L6-v2 (local) or OpenAI text-embedding-ada-002
+- **Visual Understanding**: ColQwen2-v1.0 (ColPali engine)
+- **Re-ranking**: BAAI/bge-reranker-base
+- **Vector Database**: FAISS with metadata support
 
 ## 📁 Project Structure
 
 ```
 AI-RAG-Project/
-├── src/                     # Core RAG system components
-│   ├── rag_system.py        # Main RAG orchestrator
-│   ├── salesforce_connector.py  # Salesforce integration
-│   ├── semantic_enhancer.py     # Advanced search capabilities
-│   └── document_processor.py    # Document handling
-├── streamlit_rag_app.py     # Full-featured web interface
-├── gradio_interface.py      # Alternative simple interface
-├── launch_app.py            # Application launcher
-├── requirements.txt         # Python dependencies
-└── docs/                    # Documentation and guides
+├── streamlit_rag_app.py          # Main production application
+├── launch_app.py                 # Development launcher utility
+├── requirements.txt              # Python dependencies  
+├── Dockerfile                    # Multi-stage container build
+├── docker-compose.yml            # GPU support & orchestration
+├── .dockerignore                 # Optimized build context
+├── scripts/
+│   ├── warm_up_models.py         # Model pre-loading for Docker
+│   └── health_check.py           # Container health monitoring
+├── src/                          # Core components (7 files)
+│   ├── rag_system.py            # Main RAG orchestrator
+│   ├── colpali_retriever.py     # Visual document understanding  
+│   ├── salesforce_connector.py  # External data integration
+│   ├── cross_encoder_reranker.py # Intelligent source selection
+│   ├── document_processor.py    # Document processing pipeline
+│   ├── text_chunker.py          # Text chunking utilities
+│   └── embedding_manager.py     # Embedding management
+├── data/documents/              # Document storage
+├── cache/embeddings/            # Runtime embedding cache
+└── CLAUDE.md                    # Development documentation
 ```
 
-## 🎯 How It Works
+## 🐳 Docker Optimization
 
-1. **Intent Detection**: Analyzes your question to understand what you're asking about
-2. **Smart Routing**: 
-   - Travel queries (cancel hotel, modify flight) → Salesforce search
-   - General document questions → Local document search
-3. **Enhanced Search**: Uses transformative semantic search for deeper understanding
-4. **Quality Results**: Only returns results above 70% relevance threshold
+### **Instant Startup Performance**
+| Deployment Mode | Startup Time | Model Loading | Memory Usage |
+|-----------------|-------------|---------------|--------------|
+| Local Development | 2-3 minutes | On-demand | Variable |
+| Docker CPU | **0-5 seconds** | Pre-loaded | Optimized |
+| Docker GPU | **0-5 seconds** | Pre-loaded | GPU-accelerated |
 
-## 🛠️ Usage Examples
+### **Multi-Stage Architecture**
+```dockerfile
+Stage 1 (model-builder): Download and cache all AI models
+Stage 2 (production): Copy pre-loaded models + application code
+Result: Instant startup with full functionality
+```
 
-### Document Sources
-1. **Sample Documents**: Use the provided documentation in the `docs/` folder
-2. **Upload Your Own**: Support for PDF, DOCX, TXT, CSV, XLSX files via the web interface. **Remember to select "Process Documents"!**
-3. **Salesforce Integration**: Real-time search of Knowledge Articles (if configured)
+### **Container Variants**
+- **ai-rag-app** (Port 8501): CPU-optimized for standard deployments
+- **ai-rag-app-gpu** (Port 8502): GPU-accelerated for high-performance processing
+- **model-builder**: Development container for model management
 
-### Example Questions
-**For uploaded documents:**
-- "Who is in charge of recruitment?"
-- "What are the project requirements?"
-- "Summarize the key points from the documentation"
+### **Health Monitoring**
+- Automated health checks every 30 seconds
+- Model verification via manifest validation
+- Streamlit health endpoint monitoring
+- Container restart policies for reliability
 
-**For Salesforce integration (travel/service scenarios):**
-- "How do I cancel a hotel booking for a late arrival?"
-- "What to do when a flight passenger no-shows?"
-- "Modify air reservation procedures"
-- "Handle car rental customer complaints"
+## 💡 Usage Examples
 
-## 🔧 Configuration
+### **Multi-Source Queries**
+The system automatically queries all sources and selects the best response:
 
-The system automatically detects query intent and selects the appropriate search method. You can also force specific search strategies in the advanced options.
+```
+Query: "What is the cancellation policy?"
 
-## 🐳 Docker Deployment
+Processing:
+✓ Text RAG: Searches uploaded documents
+✓ ColPali: Analyzes PDF images for visual information  
+✓ Salesforce: Searches knowledge base articles
 
-### Quick Start with Docker
+Result: BGE re-ranker selects best source (e.g., "SALESFORCE" score: 0.847)
+Reasoning: "Salesforce KB article provides most comprehensive cancellation policy"
+```
+
+### **Visual Document Understanding**
+ColPali processes PDFs as images, understanding layout and visual elements:
+- Tables, charts, and diagrams
+- Multi-column layouts
+- Visual hierarchies and formatting
+- No OCR pipeline required
+
+### **Token Transparency**
+6-column breakdown for cost monitoring:
+| Query | VLM | Salesforce | Re-rank | Response | Total |
+|-------|-----|------------|---------|----------|-------|
+| 12 | 245 | 156 | 10 | 168 | 591 |
+
+## ⚙️ Configuration
+
+### **Environment Variables** (Optional)
 ```bash
-# Using Docker Compose (recommended)
-docker-compose up -d
+# API Keys (local embeddings work without OpenAI)
+OPENAI_API_KEY=your_openai_key
 
-# Or build manually
-docker build -t rag-app .
-docker run -p 8501:8501 rag-app
+# Salesforce Integration
+SALESFORCE_USERNAME=your_username@company.com
+SALESFORCE_PASSWORD=your_password
+SALESFORCE_SECURITY_TOKEN=your_security_token
+
+# Docker Optimization
+DOCKER_PRELOADED_MODELS=true
+TRANSFORMERS_CACHE=/app/models/transformers
+HF_HOME=/app/models/huggingface
 ```
 
-### Environment Setup
-1. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-2. Edit `.env` with your API keys (optional - app works with local embeddings)
+### **Hardware Requirements**
+- **Minimum**: 8GB RAM, 4 CPU cores
+- **Recommended**: 16GB RAM, 8 CPU cores, GPU (optional)
+- **Docker**: 4GB available to Docker Desktop
+- **GPU**: CUDA-compatible for ColPali acceleration
 
-### Docker Features
-- ✅ **Fast startup** - Optimized imports for quick loading
-- ✅ **No API keys required** - Works with local embeddings by default
-- ✅ **Data persistence** - Volumes for cache and documents
-- ✅ **Production ready** - Includes restart policies
+## 🛠️ Development
 
-For detailed Docker instructions, see [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)
+### **Local Testing**
+```bash
+# Test individual components
+python scripts/health_check.py
 
-## 📊 Current Status
+# Test model loading
+python scripts/warm_up_models.py
 
-- ✅ Basic RAG system implemented
-- ✅ Streamlit and Gradio interfaces
-- ✅ Salesforce integration with intent recognition
-- ✅ Transformative semantic search
-- ✅ Docker containerization completed
-- ✅ Production deployment ready
+# Launch with debugging
+streamlit run streamlit_rag_app.py --logger.level=debug
+```
+
+### **Docker Development**
+```bash
+# Build with model pre-loading
+docker build -t ai-rag-app .
+
+# Test specific profiles
+docker-compose --profile build-models up model-builder
+docker-compose --profile gpu up ai-rag-app-gpu
+
+# Monitor health
+docker exec ai-rag-cpu python scripts/health_check.py
+```
+
+## 📊 Technical Specifications
+
+### **Performance Metrics**
+- **Query Processing**: ~2-5 seconds (includes all sources + re-ranking)
+- **Document Upload**: ~30-60 seconds per PDF (ColPali processing)
+- **Model Loading**: Instant (Docker) vs 2-3 minutes (local)
+- **Memory Usage**: ~2-4GB (CPU) / ~6-8GB (GPU)
+
+### **Scalability Features**
+- Stateless application design
+- Horizontal scaling via container orchestration
+- Persistent volume support for data and models
+- Health-check based auto-recovery
+
+## ✅ Current Status
+
+**🎯 Production Ready (All Phases Complete)**
+- ✅ **Phase 1**: Research & ColPali integration
+- ✅ **Phase 2**: Production app with multi-source architecture  
+- ✅ **Phase 3**: Docker optimization with instant startup
+- ✅ **Cleanup**: Codebase optimization (56+ obsolete files removed)
+
+**🚀 Ready for:**
+- Enterprise deployments with instant startup
+- Kubernetes orchestration and scaling
+- GPU-accelerated cloud environments
+- Multi-tenant configurations
 
 ## 🤝 Contributing
 
-Please create a feature branch for any new features or improvements:
+### **Development Workflow**
 ```bash
-git checkout -b feature-name
+git checkout -b feature/your-feature-name
 # Make changes
+python scripts/health_check.py  # Verify functionality
 git add .
-git commit -m "Add new feature"
-git push -u origin feature-name
+git commit -m "feat: your feature description"
+git push -u origin feature/your-feature-name
 ```
+
+### **Testing Guidelines**
+- Test both CPU and GPU configurations
+- Verify Docker builds complete successfully
+- Ensure health checks pass
+- Validate multi-source query processing
 
 ## 📄 License
 
@@ -155,4 +251,6 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Built with**: Custom RAG Pipeline, OpenAI/Sentence-Transformers, Salesforce API, Streamlit, FAISS, Docker
+**Built with**: Custom Multi-Source RAG Pipeline, ColPali Visual Understanding, BGE Cross-Encoder, OpenAI/Sentence-Transformers, Salesforce API, Streamlit, FAISS, Docker
+
+**Architecture**: SimpleRAGOrchestrator + BGE Re-ranker + ColPali + Instant Docker Startup

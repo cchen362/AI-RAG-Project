@@ -1,20 +1,153 @@
 version: '3.8'
+
 services:
+  # CPU-optimized service (default)
   ai-rag-app:
-    build: .
+    build: 
+      context: .
+      target: production
+    image: ai-rag-app:latest
+    container_name: ai-rag-cpu
     ports:
       - "8501:8501"
     environment:
-      # Optional - local embeddings work without API key
+      # Core application settings
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      
+      # Docker optimization flags
+      - DOCKER_PRELOADED_MODELS=true
+      - RAG_DATA_DIR=/app/data
+      - RAG_CACHE_DIR=/app/cache
+      
+      # Model cache paths (pre-loaded models)
+      - TRANSFORMERS_CACHE=/app/models/transformers
+      - HF_HOME=/app/models/huggingface
+      - TORCH_HOME=/app/models/torch
+      
+      # API Keys (optional - local embeddings work without)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      # Optional - for Salesforce integration
+      
+      # Salesforce integration (optional)
       - SALESFORCE_USERNAME=${SALESFORCE_USERNAME:-}
       - SALESFORCE_PASSWORD=${SALESFORCE_PASSWORD:-}
       - SALESFORCE_SECURITY_TOKEN=${SALESFORCE_SECURITY_TOKEN:-}
-      # Application configuration
+    volumes:
+      # Persistent data storage
+      - ./data:/app/data
+      - ./cache:/app/cache
+      # Optional: Mount local model cache to avoid rebuilds during development
+      - ai_rag_models:/app/models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+  # GPU-accelerated service (optional)
+  ai-rag-app-gpu:
+    build: 
+      context: .
+      target: production
+      # For future GPU builds: target: gpu-production
+    image: ai-rag-app:gpu
+    container_name: ai-rag-gpu
+    ports:
+      - "8502:8501"  # Different port to avoid conflicts
+    environment:
+      # All CPU environment variables plus GPU-specific
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - DOCKER_PRELOADED_MODELS=true
       - RAG_DATA_DIR=/app/data
       - RAG_CACHE_DIR=/app/cache
+      - TRANSFORMERS_CACHE=/app/models/transformers
+      - HF_HOME=/app/models/huggingface
+      - TORCH_HOME=/app/models/torch
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - SALESFORCE_USERNAME=${SALESFORCE_USERNAME:-}
+      - SALESFORCE_PASSWORD=${SALESFORCE_PASSWORD:-}
+      - SALESFORCE_SECURITY_TOKEN=${SALESFORCE_SECURITY_TOKEN:-}
+      
+      # GPU-specific settings
+      - CUDA_VISIBLE_DEVICES=0
+      - TORCH_CUDA_ARCH_LIST=6.0;6.1;7.0;7.5;8.0;8.6
     volumes:
       - ./data:/app/data
       - ./cache:/app/cache
+      - ai_rag_models:/app/models
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles:
+      - gpu  # Only start with --profile gpu
+
+  # Model builder service (for development/debugging)
+  model-builder:
+    build:
+      context: .
+      target: model-builder
+    image: ai-rag-models:latest
+    container_name: ai-rag-model-builder
+    environment:
+      - TRANSFORMERS_CACHE=/app/models/transformers
+      - HF_HOME=/app/models/huggingface
+      - TORCH_HOME=/app/models/torch
+    volumes:
+      - ai_rag_models:/app/models
+    command: ["python", "scripts/warm_up_models.py"]
+    profiles:
+      - build-models  # Only start with --profile build-models
+
+# Named volumes for persistent model storage
+volumes:
+  ai_rag_models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./models
+
+# Networks for service isolation (optional)
+networks:
+  default:
+    name: ai-rag-network
+    driver: bridge
+
+# Usage Examples:
+# 
+# CPU mode (default):
+#   docker-compose up ai-rag-app
+#
+# GPU mode (requires nvidia-docker):
+#   docker-compose --profile gpu up ai-rag-app-gpu
+#
+# Build models only:
+#   docker-compose --profile build-models up model-builder
+#
+# Full development setup:
+#   docker-compose up --build
+#
+# Production deployment:
+#   docker-compose -f docker-compose.yml up -d ai-rag-app
+#
+# Environment variables can be set in .env file:
+#   OPENAI_API_KEY=your_key_here
+#   SALESFORCE_USERNAME=your_username
+#   SALESFORCE_PASSWORD=your_password
+#   SALESFORCE_SECURITY_TOKEN=your_token
