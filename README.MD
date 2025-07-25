@@ -10,6 +10,9 @@ A sophisticated **Retrieval-Augmented Generation (RAG)** system that combines **
 - **⚡ Instant Docker Startup**: Pre-loaded models enable 0-5 second container startup (vs 2-3 minutes)
 - **🔥 GPU & CPU Support**: Hardware-optimized deployments with automatic detection
 - **🚀 Auto-initialization**: Seamless user experience with loading indicators
+- **🌍 Cross-Platform**: Windows, Linux, macOS support with intelligent poppler detection
+- **🛡️ Graceful Degradation**: Text RAG continues working when visual processing unavailable
+- **📋 System Status**: Real-time feature availability indicators in UI
 - **💰 Token Transparency**: 6-column token breakdown for cost monitoring
 - **📊 Production Ready**: Comprehensive health monitoring and container orchestration
 
@@ -91,6 +94,50 @@ AI-RAG-Project/
 └── CLAUDE.md                    # Development documentation
 ```
 
+## 🌍 Cross-Platform Support
+
+### **Platform Compatibility**
+The system automatically detects and adapts to different operating systems:
+
+| Platform | Poppler Detection | Visual Processing | Fallback Behavior |
+|----------|------------------|-------------------|-------------------|
+| **Linux/Docker** | `/usr/bin`, `/usr/local/bin` | ✅ Full Support | Text RAG continues |
+| **Windows** | Program Files, Conda paths | ✅ Full Support | Text RAG continues |
+| **macOS** | Homebrew, MacPorts | ✅ Full Support | Text RAG continues |
+
+### **Graceful Degradation**
+When poppler is unavailable, the system provides clear feedback and continues operating:
+
+```
+⚠️ Visual Processing Status:
+✅ Text RAG: Available 
+⚠️ Visual RAG (ColPali): Limited (Poppler unavailable)
+✅ Salesforce: Connected
+✅ Re-ranker: Active
+
+💡 Install poppler-utils for visual document processing
+```
+
+### **System Requirements**
+- **Required**: Python 3.9+, basic dependencies
+- **Optional**: Poppler-utils (for visual processing)
+- **Recommended**: GPU support for optimal performance
+
+### **Installation Commands**
+```bash
+# Ubuntu/Debian
+sudo apt-get install poppler-utils
+
+# Windows (Conda)
+conda install -c conda-forge poppler
+
+# macOS (Homebrew)  
+brew install poppler
+
+# Docker (automatically included)
+# No additional setup required
+```
+
 ## 🐳 Docker Optimization
 
 ### **Instant Startup Performance**
@@ -159,6 +206,9 @@ OPENAI_API_KEY=your_openai_key
 SALESFORCE_USERNAME=your_username@company.com
 SALESFORCE_PASSWORD=your_password
 SALESFORCE_SECURITY_TOKEN=your_security_token
+
+# Cross-Platform Poppler Support (optional)
+POPPLER_PATH=/custom/poppler/bin
 
 # Docker Optimization
 DOCKER_PRELOADED_MODELS=true
@@ -244,6 +294,68 @@ git push -u origin feature/your-feature-name
 - Verify Docker builds complete successfully
 - Ensure health checks pass
 - Validate multi-source query processing
+
+## 🔧 Troubleshooting
+
+### **Common Issues**
+
+#### **Visual Processing Unavailable**
+```
+⚠️ Visual RAG (ColPali): Limited (Poppler unavailable)
+```
+**Solution**: Install poppler-utils for your platform:
+- Linux: `sudo apt-get install poppler-utils`  
+- Windows: `conda install -c conda-forge poppler`
+- macOS: `brew install poppler`
+- Docker: Already included
+
+#### **OpenAI API Key Warning** 
+```
+⚠️ OpenAI API key not found - visual analysis will be limited
+```
+**Solution**: Create `.env` file with:
+```bash
+OPENAI_API_KEY=your_key_here
+```
+
+#### **Slow Performance on CPU**
+**Symptoms**: ColPali processing taking 30+ seconds per page
+**Solution**: 
+- Use GPU deployment: `docker-compose --profile gpu up ai-rag-app-gpu`
+- Or accept CPU limitations with reduced page counts
+
+#### **Docker Build Fails**
+**Common causes**:
+- Insufficient disk space (requires ~10GB)
+- Network issues during model download
+- CUDA version mismatch (GPU builds)
+
+**Solution**:
+```bash
+# Clean Docker cache
+docker system prune -a
+
+# Rebuild with verbose output  
+docker-compose build --no-cache --progress=plain
+```
+
+#### **Health Check Failures**
+**Check status**:
+```bash
+# View container logs
+docker logs ai-rag-cpu
+
+# Manual health check
+docker exec ai-rag-cpu python scripts/health_check.py
+```
+
+### **Environment Variable Reference**
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `OPENAI_API_KEY` | Enhanced visual analysis | Optional |
+| `POPPLER_PATH` | Custom poppler location | Optional |
+| `SALESFORCE_*` | Knowledge base integration | Optional |
+| `DOCKER_PRELOADED_MODELS` | Enable instant startup | Auto-set |
 
 ## 📄 License
 

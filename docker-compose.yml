@@ -33,6 +33,9 @@ services:
       - SALESFORCE_USERNAME=${SALESFORCE_USERNAME:-}
       - SALESFORCE_PASSWORD=${SALESFORCE_PASSWORD:-}
       - SALESFORCE_SECURITY_TOKEN=${SALESFORCE_SECURITY_TOKEN:-}
+      
+      # Cross-platform poppler support (optional override)
+      - POPPLER_PATH=${POPPLER_PATH:-}
     volumes:
       # Persistent data storage
       - ./data:/app/data
@@ -72,6 +75,9 @@ services:
       - SALESFORCE_USERNAME=${SALESFORCE_USERNAME:-}
       - SALESFORCE_PASSWORD=${SALESFORCE_PASSWORD:-}
       - SALESFORCE_SECURITY_TOKEN=${SALESFORCE_SECURITY_TOKEN:-}
+      
+      # Cross-platform poppler support (optional override)
+      - POPPLER_PATH=${POPPLER_PATH:-}
       
       # GPU-specific settings
       - CUDA_VISIBLE_DEVICES=0
@@ -151,3 +157,4 @@ networks:
 #   SALESFORCE_USERNAME=your_username
 #   SALESFORCE_PASSWORD=your_password
 #   SALESFORCE_SECURITY_TOKEN=your_token
+#   POPPLER_PATH=/custom/poppler/bin  # Optional: Override poppler location

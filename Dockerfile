@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
+# Note: poppler-utils provides cross-platform PDF processing support
 
 # Set working directory
 WORKDIR /app
@@ -44,6 +45,7 @@ FROM python:3.9-slim as production
 RUN apt-get update && apt-get install -y \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
+# Note: poppler-utils enables ColPali visual document processing with graceful fallback
 
 # Set working directory
 WORKDIR /app
