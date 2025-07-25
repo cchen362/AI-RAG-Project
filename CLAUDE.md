@@ -88,7 +88,7 @@ AI-RAG-Project/
 - **CPU Mode**: Lightweight testing with reduced page limits
 - **Auto-Detection**: Dynamic configuration based on available hardware
 
-### **Cross-Platform Architecture (January 2025)**
+### **Cross-Platform Architecture (July 2025)**
 - **Platform Detection**: Automatic OS detection (Windows/Linux/macOS)
 - **Intelligent Path Resolution**: Platform-specific poppler installation discovery
 - **Graceful Fallback**: Text RAG continues when visual processing unavailable
@@ -238,7 +238,7 @@ AI-RAG-Project/
 ```
 
 ---
-*Last Updated: January 2025 - Cross-Platform Enhancement Complete*
+*Last Updated: July 2025 - Cross-Platform Enhancement Complete*
 *Status: Production Ready with Cross-Platform Support & Graceful Degradation*
 
 ## 🌟 Latest Enhancements Summary
