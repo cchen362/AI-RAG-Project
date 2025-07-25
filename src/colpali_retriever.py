@@ -18,8 +18,9 @@ import torch
 import base64
 from io import BytesIO
 from PIL import Image
-
 import sys
+import platform
+import shutil
 from pathlib import Path
 
 # Add current directory to path for imports
@@ -64,6 +65,9 @@ class ColPaliRetriever:
         self.config = config
         self.is_initialized = False
         self.processed_documents = []
+        
+        # Check poppler availability during initialization
+        self.poppler_available = False
         
         # Initialize retrieval statistics
         self.retrieval_stats = {
@@ -151,6 +155,26 @@ class ColPaliRetriever:
         Process documents by converting pages to images and generating visual embeddings.
         """
         logger.info(f"🖼️ Processing {len(document_paths)} documents with ColPaliRetriever")
+        
+        # Check poppler availability on first use
+        if not hasattr(self, '_poppler_checked'):
+            self.poppler_available = self.check_poppler_availability()
+            self._poppler_checked = True
+        
+        # If poppler is not available, return early with clear messaging
+        if not self.poppler_available:
+            logger.warning("⚠️ ColPali visual processing unavailable - poppler not found")
+            logger.info("💡 Documents will need to be processed using text-based RAG only")
+            return {
+                'successful': [],
+                'failed': [{'path': path, 'filename': os.path.basename(path), 
+                           'error': 'Visual processing unavailable - poppler not found', 
+                           'type': 'visual'} for path in document_paths],
+                'total_pages': 0,
+                'total_documents': 0,
+                'processing_time': 0,
+                'retriever_type': 'visual_unavailable'
+            }
         
         start_time = time.time()
         results = {
@@ -261,6 +285,11 @@ class ColPaliRetriever:
         """
         if not self.is_initialized:
             logger.warning("⚠️ No documents processed yet")
+            return [], RetrievalMetrics(0, 0, 0, 0, 0, 0)
+        
+        # Check if poppler was available during document processing
+        if not self.poppler_available:
+            logger.warning("⚠️ Visual retrieval unavailable - poppler not found during initialization")
             return [], RetrievalMetrics(0, 0, 0, 0, 0, 0)
         
         logger.info(f"🔍 Visual retrieval for: '{query}' (top_k={top_k})")
@@ -411,28 +440,73 @@ class ColPaliRetriever:
             logger.error(f"   Traceback: {traceback.format_exc()}")
             self.page_images[doc_id] = {}
     
+    def _get_platform_poppler_paths(self) -> List[str]:
+        """Get platform-specific poppler installation paths."""
+        system_platform = platform.system().lower()
+        paths = []
+        
+        # Always check environment variable first
+        if 'POPPLER_PATH' in os.environ:
+            paths.append(os.environ['POPPLER_PATH'])
+        
+        # Always try system PATH first (works for Docker/apt-installed poppler)
+        paths.append(None)
+        
+        if system_platform == 'linux':
+            # Linux/Docker paths - prioritize system installation
+            paths.extend([
+                '/usr/bin',           # Standard apt-get install location
+                '/usr/local/bin',     # Manual installation
+                '/opt/poppler/bin',   # Alternative installation
+                '/usr/share/poppler/bin'
+            ])
+            
+        elif system_platform == 'darwin':  # macOS
+            # macOS paths - Homebrew and MacPorts
+            paths.extend([
+                '/opt/homebrew/bin',      # Apple Silicon Homebrew
+                '/usr/local/bin',         # Intel Homebrew
+                '/opt/local/bin',         # MacPorts
+                '/usr/local/Cellar/poppler/*/bin'  # Homebrew versioned
+            ])
+            
+        elif system_platform == 'windows':
+            # Windows paths - keep existing comprehensive list
+            username = os.getenv('USERNAME', '')
+            paths.extend([
+                r"C:\Program Files\poppler\poppler-24.08.0\Library\bin",  # Known working
+                r"C:\Program Files\poppler\Library\bin",
+                r"C:\Program Files\poppler\bin", 
+                r"C:\Program Files (x86)\poppler\bin",
+                r"C:\poppler\bin",
+                r"C:\tools\poppler\bin",
+                # Conda environments
+                rf"C:\Users\{username}\miniconda3\Library\bin",
+                rf"C:\Users\{username}\anaconda3\Library\bin",
+                r"C:\ProgramData\miniconda3\Library\bin",
+                r"C:\ProgramData\anaconda3\Library\bin"
+            ])
+        
+        # Filter out non-existent paths (except None for system PATH)
+        validated_paths = []
+        for path in paths:
+            if path is None:
+                validated_paths.append(path)  # Always include system PATH
+            elif os.path.exists(path):
+                validated_paths.append(path)
+            else:
+                logger.debug(f"Poppler path does not exist: {path}")
+        
+        logger.info(f"🔧 Platform: {system_platform}, found {len(validated_paths)} poppler paths")
+        return validated_paths
+    
     def _convert_pdf_with_fallbacks(self, pdf_path: str):
         """Convert PDF to images with multiple fallback strategies."""
         from pdf2image import convert_from_path
         from pdf2image.exceptions import PDFInfoNotInstalledError
         
-        # Windows Poppler installation paths - prioritize known working installation
-        possible_poppler_paths = [
-            r"C:\Program Files\poppler\poppler-24.08.0\Library\bin",  # Known working installation
-            r"C:\Program Files\poppler\Library\bin",
-            None,  # Try system PATH after known paths
-            r"C:\Program Files\poppler\bin", 
-            r"C:\Program Files (x86)\poppler\bin",
-            r"C:\poppler\bin",
-            r"C:\tools\poppler\bin",
-            # Conda environments
-            r"C:\Users\{}\miniconda3\Library\bin".format(os.getenv('USERNAME', '')),
-            r"C:\Users\{}\anaconda3\Library\bin".format(os.getenv('USERNAME', '')),
-        ]
-        
-        # Also check environment variables
-        if 'POPPLER_PATH' in os.environ:
-            possible_poppler_paths.insert(1, os.environ['POPPLER_PATH'])
+        # Get platform-specific poppler paths
+        possible_poppler_paths = self._get_platform_poppler_paths()
         
         for poppler_path in possible_poppler_paths:
             try:
@@ -496,17 +570,93 @@ class ColPaliRetriever:
                         logger.debug(f"Conversion failed with found poppler {poppler_dir}: {e}")
                         continue
             
-            # If still no success, provide helpful error message
-            logger.error("❌ Poppler not found. Please install poppler-utils:")
-            logger.error("   Windows: Download from https://github.com/oschwartz10612/poppler-windows")
-            logger.error("   Or: conda install -c conda-forge poppler")
-            logger.error("   Or: choco install poppler")
+            # If still no success, provide platform-specific error message
+            self._log_poppler_installation_help()
             
             return []
             
         except Exception as e:
             logger.error(f"Final poppler search failed: {e}")
             return []
+    
+    def _log_poppler_installation_help(self):
+        """Log platform-specific poppler installation instructions."""
+        system_platform = platform.system().lower()
+        
+        logger.error("❌ Poppler not found. Please install poppler-utils:")
+        
+        if system_platform == 'linux':
+            logger.error("   Ubuntu/Debian: sudo apt-get install poppler-utils")
+            logger.error("   CentOS/RHEL: sudo yum install poppler-utils")
+            logger.error("   Alpine: apk add poppler-utils")
+            
+        elif system_platform == 'darwin':  # macOS
+            logger.error("   Homebrew: brew install poppler")
+            logger.error("   MacPorts: sudo port install poppler")
+            
+        elif system_platform == 'windows':
+            logger.error("   Download: https://github.com/oschwartz10612/poppler-windows")
+            logger.error("   Conda: conda install -c conda-forge poppler")
+            logger.error("   Chocolatey: choco install poppler")
+            
+        else:
+            logger.error("   Please install poppler-utils for your system")
+            
+        logger.error("   Or set POPPLER_PATH environment variable to poppler bin directory")
+    
+    def check_poppler_availability(self) -> bool:
+        """Check if poppler is available for PDF processing."""
+        try:
+            from pdf2image import convert_from_path
+            from pdf2image.exceptions import PDFInfoNotInstalledError
+            
+            # Try to find poppler using platform-specific paths
+            possible_paths = self._get_platform_poppler_paths()
+            
+            for poppler_path in possible_paths:
+                try:
+                    # Quick test - just check if the library can find poppler
+                    # We don't actually convert anything, just verify poppler is accessible
+                    if poppler_path is None:
+                        # Test system PATH
+                        test_result = shutil.which('pdftoppm')
+                        if test_result:
+                            logger.info(f"✅ Poppler found in system PATH: {test_result}")
+                            self.poppler_available = True
+                            return True
+                    else:
+                        # Test specific path
+                        if os.path.exists(poppler_path):
+                            pdftoppm_path = os.path.join(poppler_path, 'pdftoppm')
+                            if os.path.exists(pdftoppm_path) or os.path.exists(f"{pdftoppm_path}.exe"):
+                                logger.info(f"✅ Poppler found at: {poppler_path}")
+                                self.poppler_available = True
+                                return True
+                except Exception as e:
+                    logger.debug(f"Poppler check failed for {poppler_path}: {e}")
+                    continue
+            
+            # Final attempt: Try shutil.which for cross-platform executable search
+            poppler_executables = ['pdftoppm', 'pdfinfo']
+            for exe in poppler_executables:
+                if shutil.which(exe):
+                    logger.info(f"✅ Poppler executable found: {exe}")
+                    self.poppler_available = True
+                    return True
+            
+            logger.warning("⚠️ Poppler not found - visual document processing will be unavailable")
+            self._log_poppler_installation_help()
+            self.poppler_available = False
+            return False
+            
+        except ImportError:
+            logger.error("❌ pdf2image library not installed")
+            self.poppler_available = False
+            return False
+        except Exception as e:
+            logger.warning(f"⚠️ Error checking poppler availability: {e}")
+            self.poppler_available = False
+            return False
     
     def _precompute_vlm_analysis(self, doc_id: str, filename: str):
         """Precompute VLM analysis for all pages while PDF file still exists."""

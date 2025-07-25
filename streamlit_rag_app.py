@@ -1,5 +1,9 @@
 ## Complete Streamlit RAG Application
 
+# Load environment variables first
+from dotenv import load_dotenv
+load_dotenv()
+
 # Configure Unicode support for Windows
 import os
 import sys
@@ -300,10 +304,19 @@ class SimpleRAGOrchestrator:
             
             try:
                 self.colpali_retriever = ColPaliRetriever(colpali_config)
-                if torch.cuda.is_available():
-                    logger.info("✅ ColPali retriever initialized (GPU mode)")
+                
+                # Check poppler availability during initialization
+                poppler_available = self.colpali_retriever.check_poppler_availability()
+                
+                if poppler_available:
+                    if torch.cuda.is_available():
+                        logger.info("✅ ColPali retriever initialized (GPU mode)")
+                    else:
+                        logger.info("✅ ColPali retriever initialized (CPU testing mode)")
                 else:
-                    logger.info("✅ ColPali retriever initialized (CPU testing mode)")
+                    logger.warning("⚠️ ColPali initialized but poppler unavailable")
+                    logger.warning("Visual document processing will be limited")
+                    
             except Exception as e:
                 logger.warning(f"⚠️ ColPali initialization failed: {e}")
                 logger.warning("Multi-source search will use text + Salesforce only")
@@ -328,6 +341,46 @@ class SimpleRAGOrchestrator:
         except Exception as e:
             logger.error(f"❌ Component initialization failed: {e}")
             return False
+    
+    def get_system_capabilities(self) -> Dict[str, Any]:
+        """Get current system capabilities for UI display."""
+        capabilities = {
+            'text_rag': {
+                'available': self.text_rag is not None,
+                'status': '✅ Available' if self.text_rag else '❌ Unavailable'
+            },
+            'visual_rag': {
+                'available': False,
+                'status': '❌ Unavailable',
+                'poppler_available': False
+            },
+            'salesforce': {
+                'available': self.sf_connector is not None,
+                'status': '✅ Connected' if self.sf_connector else '❌ Disconnected'
+            },
+            'reranker': {
+                'available': self.reranker is not None,
+                'status': '✅ Active' if self.reranker else '❌ Inactive'
+            }
+        }
+        
+        # Check ColPali/Visual RAG detailed status
+        if self.colpali_retriever is not None:
+            poppler_available = getattr(self.colpali_retriever, 'poppler_available', False)
+            if poppler_available:
+                capabilities['visual_rag'] = {
+                    'available': True,
+                    'status': '✅ Available',
+                    'poppler_available': True
+                }
+            else:
+                capabilities['visual_rag'] = {
+                    'available': False,
+                    'status': '⚠️ Limited (Poppler unavailable)',
+                    'poppler_available': False
+                }
+        
+        return capabilities
     
     def query_all_sources(self, user_query: str) -> Dict[str, Any]:
         """Query ALL sources and use re-ranker to select best response"""
@@ -949,6 +1002,39 @@ def main():
             
             ⚠️ ColPali performance optimized for GPU deployment
             """)
+        
+        st.divider()
+        
+        # Feature Status Indicators
+        st.subheader("📋 Feature Status")
+        
+        if st.session_state.components_initialized:
+            # Get system capabilities
+            capabilities = st.session_state.orchestrator.get_system_capabilities()
+            
+            # Display status for each feature
+            for feature_name, feature_info in capabilities.items():
+                feature_labels = {
+                    'text_rag': '📝 Text RAG',
+                    'visual_rag': '🖼️ Visual RAG (ColPali)',
+                    'salesforce': '🏢 Salesforce',
+                    'reranker': '🎯 Re-ranker'
+                }
+                
+                label = feature_labels.get(feature_name, feature_name.title())
+                status = feature_info['status']
+                
+                if '✅' in status:
+                    st.success(f"{label}: {status}")
+                elif '⚠️' in status:
+                    st.warning(f"{label}: {status}")
+                    # Special handling for visual RAG poppler issues
+                    if feature_name == 'visual_rag' and not feature_info.get('poppler_available', False):
+                        st.caption("💡 Install poppler-utils for visual document processing")
+                else:
+                    st.error(f"{label}: {status}")
+        else:
+            st.info("🔄 Feature status will show after initialization")
         
         st.divider()
         
