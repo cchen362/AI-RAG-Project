@@ -11,6 +11,8 @@ import logging
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 import torch
+import platform
+import shutil
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -250,41 +252,75 @@ class VisualDocumentProcessor:
             return []
     
     def _get_poppler_paths(self) -> List[Optional[str]]:
-        """Get possible poppler installation paths."""
-        paths = [
-            None,  # System PATH first (conda should add poppler to PATH)
-        ]
+        """Get platform-specific poppler installation paths."""
+        system_platform = platform.system().lower()
+        paths = []
         
-        # Add conda environment paths (miniconda/anaconda)
-        username = os.getenv('USERNAME', '')
-        if username:
+        # Always check environment variable first
+        if 'POPPLER_PATH' in os.environ:
+            paths.append(os.environ['POPPLER_PATH'])
+        
+        # Always try system PATH first (works for Docker/apt-installed poppler)
+        paths.append(None)
+        
+        if system_platform == 'linux':
+            # Linux/Docker paths - prioritize system installation
             paths.extend([
-                rf"C:\Users\{username}\miniconda3\Library\bin",
-                rf"C:\Users\{username}\anaconda3\Library\bin",
-                rf"C:\Users\{username}\Miniconda3\Library\bin",
-                rf"C:\Users\{username}\Anaconda3\Library\bin"
+                '/usr/bin',           # Standard apt-get install location
+                '/usr/local/bin',     # Manual installation
+                '/opt/poppler/bin',   # Alternative installation
+                '/usr/share/poppler/bin'
+            ])
+            
+        elif system_platform == 'darwin':  # macOS
+            # macOS paths - Homebrew and MacPorts
+            paths.extend([
+                '/opt/homebrew/bin',      # Apple Silicon Homebrew
+                '/usr/local/bin',         # Intel Homebrew
+                '/opt/local/bin',         # MacPorts
+                '/usr/local/Cellar/poppler/*/bin'  # Homebrew versioned
+            ])
+            
+        elif system_platform == 'windows':
+            # Windows paths - comprehensive list
+            username = os.getenv('USERNAME', '')
+            
+            # Add conda environment variable paths
+            if 'CONDA_PREFIX' in os.environ:
+                conda_prefix = os.environ['CONDA_PREFIX']
+                paths.append(os.path.join(conda_prefix, 'Library', 'bin'))
+            
+            # Add conda environment paths (miniconda/anaconda)
+            if username:
+                paths.extend([
+                    rf"C:\Users\{username}\miniconda3\Library\bin",
+                    rf"C:\Users\{username}\anaconda3\Library\bin",
+                    rf"C:\Users\{username}\Miniconda3\Library\bin",
+                    rf"C:\Users\{username}\Anaconda3\Library\bin"
+                ])
+            
+            # Fallback manual installation paths
+            paths.extend([
+                r"C:\Program Files\poppler\poppler-24.08.0\Library\bin",
+                r"C:\Program Files\poppler\Library\bin",
+                r"C:\Program Files\poppler\bin",
+                r"C:\Program Files (x86)\poppler\bin",
+                r"C:\poppler\bin",
+                r"C:\tools\poppler\bin"
             ])
         
-        # Add environment variable path
-        if 'POPPLER_PATH' in os.environ:
-            paths.insert(1, os.environ['POPPLER_PATH'])
+        # Filter out non-existent paths (except None for system PATH)
+        validated_paths = []
+        for path in paths:
+            if path is None:
+                validated_paths.append(path)  # Always include system PATH
+            elif os.path.exists(path):
+                validated_paths.append(path)
+            else:
+                logger.debug(f"Poppler path does not exist: {path}")
         
-        # Add conda environment variable paths
-        if 'CONDA_PREFIX' in os.environ:
-            conda_prefix = os.environ['CONDA_PREFIX']
-            paths.insert(1, os.path.join(conda_prefix, 'Library', 'bin'))
-        
-        # Fallback manual installation paths
-        paths.extend([
-            r"C:\Program Files\poppler\poppler-24.08.0\Library\bin",
-            r"C:\Program Files\poppler\Library\bin",
-            r"C:\Program Files\poppler\bin",
-            r"C:\Program Files (x86)\poppler\bin",
-            r"C:\poppler\bin",
-            r"C:\tools\poppler\bin"
-        ])
-        
-        return paths
+        logger.info(f"🔧 Platform: {system_platform}, found {len(validated_paths)} poppler paths")
+        return validated_paths
     
     def _generate_embeddings(self, images: List) -> torch.Tensor:
         """Generate ColPali embeddings for document images."""
