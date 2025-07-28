@@ -180,22 +180,44 @@ class DocumentProcessor:
         """Extract content from Excel files."""
         try:
             excel_file = pd.ExcelFile(file_path)
-            content = ""
+            content = "## Excel Workbook Analysis\n\n"
 
             for sheet_name in excel_file.sheet_names:
                 df = pd.read_excel(file_path, sheet_name=sheet_name)
 
-                content += f"\n--- Sheet: {sheet_name} ---\n"
-                content += "Columns: " + " | ".join(df.columns.astype(str)) + "\n"
+                content += f"### Sheet: {sheet_name}\n"
+                content += f"This sheet contains {len(df)} rows and {len(df.columns)} columns.\n\n"
+                
+                # Add column definitions for better semantic understanding
+                content += "#### Column Structure:\n"
+                for col in df.columns:
+                    # Get sample non-null values to understand data type
+                    sample_vals = df[col].dropna().head(3).tolist()
+                    if sample_vals:
+                        sample_str = ", ".join([str(v)[:40] for v in sample_vals])
+                        content += f"- {col}: {sample_str}...\n"
+                    else:
+                        content += f"- {col}: (empty column)\n"
+                content += "\n"
 
-                # Add data rows (limit to prevent huge text blocks)
+                # Add data in semantic sections (grouped for better chunking)
+                content += "#### Sheet Data:\n"
                 max_rows = self.config.get('excel_max_rows', 100)
-                for idx, row in df.head(max_rows).iterrows():
-                    row_text = " | ".join([str(val) for val in row.values])
-                    content += f"Row {idx + 1}: {row_text}\n"
+                
+                # Group rows for better chunking (every 15 rows)
+                for group_start in range(0, min(len(df), max_rows), 15):
+                    group_end = min(group_start + 15, len(df), max_rows)
+                    content += f"\n##### Rows {group_start + 1}-{group_end}:\n"
+                    
+                    for idx in range(group_start, group_end):
+                        row = df.iloc[idx]
+                        row_text = " | ".join([f"{col}: {val}" for col, val in zip(df.columns, row.values)])
+                        content += f"Row {idx + 1}: {row_text}\n"
 
                 if len(df) > max_rows:
-                    content += f"... ({len(df) - max_rows} more rows)\n"
+                    content += f"\n... ({len(df) - max_rows} additional rows not shown)\n"
+                    
+                content += "\n---\n\n"  # Separator between sheets
 
             return content
     
@@ -216,17 +238,35 @@ class DocumentProcessor:
         try:
             df = pd.read_csv(file_path)
 
-            content = f"CSV file with {len(df)} rows and {len(df.columns)} columns\n"
-            content += "Columns: " + " | ".join(df.columns) + "\n\n"
-
-            # Add sample rows
+            # Create semantic-friendly CSV content
+            content = f"## CSV Data Summary\n"
+            content += f"This CSV file contains {len(df)} rows and {len(df.columns)} columns.\n\n"
+            
+            # Add column definitions for better semantic understanding
+            content += "### Column Definitions:\n"
+            for col in df.columns:
+                # Get sample non-null values to understand data type
+                sample_vals = df[col].dropna().head(3).tolist()
+                sample_str = ", ".join([str(v)[:50] for v in sample_vals])
+                content += f"- {col}: {sample_str}...\n"
+            content += "\n"
+            
+            # Add data in semantic sections
+            content += "### Data Content:\n"
             max_rows = self.config.get('csv_max_rows', 50)
-            for idx, row in df.head(max_rows).iterrows():
-                row_text = " | ".join([str(val) for val in row.values])
-                content += f"Row {idx + 1}: {row_text}\n"
+            
+            # Group rows for better chunking (every 10 rows)
+            for group_start in range(0, min(len(df), max_rows), 10):
+                group_end = min(group_start + 10, len(df), max_rows)
+                content += f"\n#### Rows {group_start + 1}-{group_end}:\n"
+                
+                for idx in range(group_start, group_end):
+                    row = df.iloc[idx]
+                    row_text = " | ".join([f"{col}: {val}" for col, val in zip(df.columns, row.values)])
+                    content += f"Row {idx + 1}: {row_text}\n"
 
             if len(df) > max_rows:
-                content += f"... ({len(df) - max_rows} more rows)\n"
+                content += f"\n... ({len(df) - max_rows} additional rows not shown)\n"
 
             return content
         

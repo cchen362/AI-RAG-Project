@@ -4,8 +4,11 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-# Configure Unicode support for Windows
+# Fix OpenMP library conflict (common with FAISS/PyTorch)
 import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
+# Configure Unicode support for Windows
 import sys
 if sys.platform.startswith('win'):
     os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -40,6 +43,10 @@ from src.cross_encoder_reranker import CrossEncoderReRanker
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Suppress excessive httpx logging from OpenAI API calls
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
 
 # Configure Streamlit page with file upload settings
 st.set_page_config(
@@ -265,17 +272,21 @@ class SimpleRAGOrchestrator:
             if not self.reranker.initialize():
                 logger.warning("⚠️ Re-ranker initialization failed - using fallback scoring")
             
-            # Initialize Text RAG system (always)
-            logger.info("📝 Initializing Text RAG system...")
+            # Initialize Text RAG system (always) with enhanced configuration
+            logger.info("📝 Initializing Text RAG system with OpenAI embeddings...")
             text_config = {
-                'chunk_size': 800,
-                'chunk_overlap': 150,
-                'embedding_model': 'local',
+                'chunk_size': 1000,
+                'chunk_overlap': 200,
+                'embedding_model': 'openai',  # Updated to use OpenAI embeddings
                 'generation_model': 'gpt-3.5-turbo',
                 'max_retrieved_chunks': 5,
                 'temperature': 0.1
             }
             self.text_rag = RAGSystem(text_config)
+            
+            # Reinitialize vector database to ensure correct dimensions
+            logger.info("🔄 Ensuring vector database has correct dimensions...")
+            self.text_rag.reinitialize_vector_database()
             
             # Initialize ColPali retriever (production settings with GPU detection)
             import torch
@@ -1169,7 +1180,7 @@ def main():
             uploaded_files = st.file_uploader(
                 "Upload documents",
                 accept_multiple_files=True,
-                type=['pdf', 'txt', 'docx'],
+                type=['pdf', 'txt', 'docx', 'doc', 'xlsx', 'xls', 'csv'],
                 help="Upload documents for multi-source processing (max 200MB per file)",
                 key="main_file_uploader"  # Static key prevents AxiosError 400
             )
@@ -1238,7 +1249,7 @@ def main():
                                     continue
                                 
                                 # File type validation (additional check)
-                                allowed_extensions = ['.pdf', '.txt', '.docx']
+                                allowed_extensions = ['.pdf', '.txt', '.docx', '.doc', '.xlsx', '.xls', '.csv']
                                 file_extension = Path(uploaded_file.name).suffix.lower()
                                 if file_extension not in allowed_extensions:
                                     st.error(f"❌ File {uploaded_file.name} has unsupported extension: {file_extension}")

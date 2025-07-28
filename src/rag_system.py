@@ -20,8 +20,13 @@ Imagine you're running a smart library system:
 import os
 import sys
 import logging
+import re
+import numpy as np
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+
+# Fix OpenMP library conflicts
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 # Add the current directory to Python path for imports
 # This is like telling Python where to find your kitchen appliances
@@ -80,10 +85,11 @@ class RAGSystem:
         try:
             self.doc_processor = DocumentProcessor()
             self.text_chunker = TextChunker(
-                chunk_size=config.get('chunk_size', 800),
-                overlap=config.get('chunk_overlap', 150)
+                chunk_size=config.get('chunk_size', 1000),
+                overlap=config.get('chunk_overlap', 200),
+                strategy="semantic"  # Use semantic chunking for better coherence
             )
-            self.embedding_manager = EmbeddingManager.create_local()
+            self.embedding_manager = EmbeddingManager.create_openai("text-embedding-3-large", dimensions=512)
             
             # Initialize vector database for storing embeddings
             from embedding_manager import VectorDatabase
@@ -152,26 +158,52 @@ class RAGSystem:
                 })
         
         results['processing_time'] = time.time() - start_time
+        
+        # Set initialization status based on successful documents
+        was_initialized = self.is_initialized
         self.is_initialized = len(results['successful']) > 0
         
         logger.info(f"✅ Processed {len(results['successful'])} documents successfully")
         logger.info(f"📊 Created {results['total_chunks']} searchable chunks")
+        logger.info(f"🔄 System initialization status: {was_initialized} -> {self.is_initialized}")
+        
+        if self.is_initialized and not was_initialized:
+            logger.info(f"🎉 RAG system is now initialized and ready for queries!")
+        elif not self.is_initialized:
+            logger.warning(f"⚠️ RAG system is not initialized - no documents processed successfully")
+            if results['failed']:
+                logger.warning(f"   Failed documents: {[f['path'] for f in results['failed']]}")
+                logger.warning(f"   Errors: {[f['error'] for f in results['failed']]}")
+        
+        # Add vector database status check
+        if hasattr(self, 'vector_db'):
+            total_vectors = self.vector_db.index.ntotal if hasattr(self.vector_db, 'index') else 0
+            logger.info(f"📊 Vector database status: {total_vectors} total vectors stored")
         
         return results
     
     def _process_document_simple(self, doc_path: str) -> Dict[str, Any]:
         """Process document through full pipeline: extract text, chunk, and create embeddings."""
         try:
+            logger.info(f"📄 Processing document: {os.path.basename(doc_path)}")
+            
             # 1. Extract text content from document
+            logger.debug("Step 1: Extracting text content...")
             doc_result = self.doc_processor.process_file(doc_path)
             if not doc_result.get('success', False):
-                return {'success': False, 'error': doc_result.get('error', 'Processing failed')}
+                error_msg = doc_result.get('error', 'Processing failed')
+                logger.error(f"❌ Text extraction failed: {error_msg}")
+                return {'success': False, 'error': f'Text extraction failed: {error_msg}'}
             
             content = doc_result.get('content', '')
             if not content or not content.strip():
+                logger.error("❌ No content extracted from document")
                 return {'success': False, 'error': 'No content extracted'}
             
+            logger.info(f"✅ Extracted {len(content)} characters of content")
+            
             # 2. Create text chunks
+            logger.debug("Step 2: Creating text chunks...")
             chunks = self.text_chunker.chunk_text(
                 content, 
                 source_metadata={
@@ -181,17 +213,37 @@ class RAGSystem:
             )
             
             if not chunks:
+                logger.error("❌ No chunks created from content")
                 return {'success': False, 'error': 'No chunks created from content'}
             
+            logger.info(f"✅ Created {len(chunks)} text chunks")
+            
             # 3. Create embeddings for chunks
+            logger.debug("Step 3: Creating embeddings...")
             embeddings = []
-            for chunk_data in chunks:
+            for i, chunk_data in enumerate(chunks):
                 chunk_text = chunk_data.content  # TextChunk has content attribute
                 if chunk_text.strip():
-                    embedding = self.embedding_manager.create_embedding(chunk_text)
-                    embeddings.append(embedding)
+                    try:
+                        embedding = self.embedding_manager.create_embedding(chunk_text)
+                        
+                        # Validate embedding before adding
+                        if not isinstance(embedding, np.ndarray):
+                            raise ValueError(f"Embedding is not numpy array, got {type(embedding)}")
+                        if embedding.shape != (self.embedding_manager.embedding_dimension,):
+                            raise ValueError(f"Embedding has wrong shape {embedding.shape}, expected ({self.embedding_manager.embedding_dimension},)")
+                        
+                        embeddings.append(embedding)
+                        logger.debug(f"✅ Created embedding for chunk {i+1}/{len(chunks)} - shape: {embedding.shape}")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to create embedding for chunk {i+1}: {str(e)}")
+                        logger.error(f"   Chunk text preview: {chunk_text[:100]}...")
+                        raise e
+            
+            logger.info(f"✅ Created {len(embeddings)} embeddings (expected dimension: {self.embedding_manager.embedding_dimension})")
             
             # 4. Store in vector database (if available)
+            logger.debug("Step 4: Storing in vector database...")
             if hasattr(self, 'vector_db') and embeddings:
                 # Add vectors to database with metadata
                 chunk_metadata = []
@@ -204,9 +256,21 @@ class RAGSystem:
                         'source_path': doc_path
                     })
                 
-                self.vector_db.add_vectors(embeddings, chunk_metadata)
+                try:
+                    self.vector_db.add_vectors(embeddings, chunk_metadata)
+                    logger.info(f"✅ Stored {len(embeddings)} embeddings in vector database")
+                except Exception as e:
+                    logger.error(f"❌ Failed to store embeddings in vector database: {str(e)}")
+                    raise e
+            else:
+                logger.warning("⚠️ Vector database not available or no embeddings to store")
             
             logger.info(f"✅ Processed {len(chunks)} chunks from {os.path.basename(doc_path)}")
+            
+            # Add to processed documents list for query functionality
+            if doc_path not in self.processed_documents:
+                self.processed_documents.append(doc_path)
+                
             return {
                 'success': True, 
                 'chunks_created': len(chunks),
@@ -228,9 +292,26 @@ class RAGSystem:
         - It gives you an answer and tells you which books it used
         """
         if not self.is_initialized:
+            # Provide detailed diagnostic information
+            total_vectors = 0
+            if hasattr(self, 'vector_db') and hasattr(self.vector_db, 'index'):
+                total_vectors = self.vector_db.index.ntotal
+                
+            error_details = [
+                'No documents have been processed successfully yet.',
+                f'Total processed documents: {len(self.processed_documents)}',
+                f'Vector database contains: {total_vectors} vectors'
+            ]
+            
+            if len(self.processed_documents) > 0:
+                error_details.append('Some documents were processed but failed during embedding/storage.')
+                error_details.append('Check the logs above for detailed error messages.')
+            else:
+                error_details.append('Please add documents using add_documents() first.')
+                
             return {
                 'success': False,
-                'error': 'No documents have been processed yet. Please add documents first.'
+                'error': ' '.join(error_details)
             }
         
         logger.info(f"🔍 Searching for: {question}")
@@ -240,10 +321,14 @@ class RAGSystem:
             max_chunks = max_chunks or self.config.get('max_retrieved_chunks', 5)
             
             # Create query embedding
+            logger.info(f"📊 Creating embedding for query...")
             query_embedding = self.embedding_manager.create_embedding(question)
+            logger.info(f"✅ Query embedding created: shape {query_embedding.shape}")
             
             # Search vector database for similar chunks
+            logger.info(f"🔍 Searching vector database (top_k={max_chunks})...")
             search_results = self.vector_db.search(query_embedding, top_k=max_chunks)
+            logger.info(f"📊 Found {len(search_results)} search results")
             
             if not search_results:
                 return {
@@ -253,15 +338,13 @@ class RAGSystem:
                     'confidence': 0.0
                 }
             
-            # Generate answer using the found information
-            context_texts = [result['metadata']['content'] for result in search_results]
-            context = "\n\n".join(context_texts[:3])  # Use top 3 chunks for context
-            
-            # Simple answer generation (can be enhanced with LLM later)
-            response = {
-                'answer': f"Based on the relevant documents, here's what I found:\n\n{context[:500]}...",
-                'confidence': search_results[0]['score'] if search_results else 0.0
-            }
+            # Generate enhanced answer using the found information
+            response = self._generate_enhanced_answer(question, search_results)
+            if not response:
+                response = {
+                    'answer': "I found relevant information but encountered an issue generating the response. Please try rephrasing your question.",
+                    'confidence': 0.0
+                }
             
             return {
                 'success': True,
@@ -274,6 +357,9 @@ class RAGSystem:
             
         except Exception as e:
             logger.error(f"❌ Query failed: {str(e)}")
+            # Add more detailed error information
+            import traceback
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             return {
                 'success': False,
                 'error': f"Query processing failed: {str(e)}"
@@ -346,6 +432,296 @@ class RAGSystem:
         except Exception as e:
             logger.error(f"❌ Failed to clear documents: {str(e)}")
             return False
+    
+    def reinitialize_vector_database(self) -> bool:
+        """
+        Reinitialize vector database with correct dimensions.
+        Used to fix dimension mismatches after embedding model changes.
+        """
+        try:
+            logger.info("🔄 Reinitializing vector database with correct dimensions...")
+            
+            # Import here to avoid circular imports
+            from embedding_manager import VectorDatabase
+            
+            # Create new vector database with current embedding dimensions
+            self.vector_db = VectorDatabase(
+                dimension=self.embedding_manager.embedding_dimension,
+                index_type="flat"
+            )
+            
+            # Clear processed documents since they need to be re-embedded
+            self.processed_documents = []
+            self.is_initialized = False
+            
+            logger.info(f"✅ Vector database reinitialized with {self.embedding_manager.embedding_dimension} dimensions")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to reinitialize vector database: {str(e)}")
+            return False
+
+    def _generate_enhanced_answer(self, question: str, search_results: List[Dict]) -> Dict[str, Any]:
+        """Generate natural language answers from search results."""
+        try:
+            if not search_results:
+                return None
+                
+            # Extract the most relevant content for answer synthesis
+            top_results = search_results[:3]  # Focus on top 3 for quality
+            
+            # Determine query type for appropriate response style
+            query_type = self._classify_query_type(question)
+            
+            # Extract and clean content
+            relevant_content = []
+            max_confidence = 0.0
+            
+            for result in top_results:
+                content = result['metadata'].get('content', '').strip()
+                score = result.get('score', 0.0)
+                source = result['metadata'].get('filename', 'document')
+                
+                if content and score > 0.2:  # Only include reasonably relevant content
+                    relevant_content.append({
+                        'content': content,
+                        'score': score,
+                        'source': source
+                    })
+                    max_confidence = max(max_confidence, score)
+            
+            if not relevant_content:
+                return None
+            
+            # Generate answer based on query type
+            if query_type == 'factual':
+                answer = self._generate_factual_answer(question, relevant_content)
+            elif query_type == 'data_lookup':
+                answer = self._generate_data_answer(question, relevant_content)
+            elif query_type == 'procedural':
+                answer = self._generate_procedural_answer(question, relevant_content)
+            else:
+                answer = self._generate_general_answer(question, relevant_content)
+            
+            return {
+                'answer': answer,
+                'confidence': max_confidence
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Enhanced answer generation failed: {str(e)}")
+            return None
+    
+    def _classify_query_type(self, question: str) -> str:
+        """Classify query type to determine appropriate response style."""
+        question_lower = question.lower()
+        
+        # Data lookup queries (looking for specific values)
+        data_patterns = ['which', 'what is the', 'how many', 'how much', 'highest', 'lowest', 'most', 'least', 'revenue', 'count', 'number of']
+        if any(pattern in question_lower for pattern in data_patterns):
+            return 'data_lookup'
+        
+        # Procedural queries (how-to, steps, processes)
+        procedural_patterns = ['how to', 'steps', 'process', 'procedure', 'method', 'way to']
+        if any(pattern in question_lower for pattern in procedural_patterns):
+            return 'procedural'
+        
+        # Factual queries (what is, define, explain)
+        factual_patterns = ['what is', 'what are', 'define', 'explain', 'describe', 'tell me about']
+        if any(pattern in question_lower for pattern in factual_patterns):
+            return 'factual'
+        
+        return 'general'
+    
+    def _generate_factual_answer(self, question: str, content_items: List[Dict]) -> str:
+        """Generate natural language answer for factual questions."""
+        # Extract key information from the most relevant content
+        best_content = content_items[0]['content']
+        
+        # Look for definitions, explanations, or key facts
+        sentences = [s.strip() for s in best_content.split('.') if s.strip()]
+        
+        # Find the most relevant sentence(s)
+        question_keywords = set(question.lower().split()) - {'what', 'is', 'are', 'the', 'a', 'an', 'define', 'explain'}
+        
+        relevant_sentences = []
+        for sentence in sentences:
+            sentence_words = set(sentence.lower().split())
+            if question_keywords & sentence_words:  # If there's keyword overlap
+                relevant_sentences.append(sentence)
+        
+        if relevant_sentences:
+            answer = ". ".join(relevant_sentences[:2])  # Take top 2 relevant sentences
+            if not answer.endswith('.'):
+                answer += '.'
+        else:
+            # Fallback to first few sentences
+            answer = ". ".join(sentences[:2])
+            if not answer.endswith('.'):
+                answer += '.'
+        
+        return answer
+    
+    def _generate_data_answer(self, question: str, content_items: List[Dict]) -> str:
+        """Generate answer for data lookup queries."""
+        best_content = content_items[0]['content']
+        
+        # Handle CSV/structured data differently
+        if '|' in best_content or 'Row' in best_content:
+            return self._extract_data_from_structured_content(question, best_content)
+        
+        # For regular text, extract numerical data or specific values
+        lines = [line.strip() for line in best_content.split('\n') if line.strip()]
+        
+        # Look for lines with numbers or specific data
+        data_lines = []
+        for line in lines:
+            if any(char.isdigit() for char in line) or any(word in line.lower() for word in ['revenue', 'count', 'number', 'total', 'amount']):
+                data_lines.append(line)
+        
+        if data_lines:
+            return ". ".join(data_lines[:3]) + "."
+        else:
+            return self._generate_general_answer(question, content_items)
+    
+    def _extract_data_from_structured_content(self, question: str, content: str) -> str:
+        """Extract specific data from CSV/structured content and present naturally."""
+        question_lower = question.lower()
+        
+        # Look for highest/most revenue queries
+        if 'highest' in question_lower and 'revenue' in question_lower:
+            # Parse revenue data from structured content
+            lines = content.split('\n')
+            revenues = []
+            
+            for line in lines:
+                if 'revenue:' in line.lower() or '|' in line:
+                    # Extract company and revenue information
+                    parts = line.split('|') if '|' in line else [line]
+                    for part in parts:
+                        if 'revenue' in part.lower() and any(char.isdigit() for char in part):
+                            revenues.append(line.strip())
+            
+            if revenues:
+                # Find the highest revenue entry
+                highest_revenue_line = max(revenues, key=lambda x: self._extract_number(x))
+                company_name = self._extract_company_name(highest_revenue_line)
+                revenue_amount = self._format_revenue(self._extract_number(highest_revenue_line))
+                
+                return f"Based on the data, {company_name} has the highest revenue at {revenue_amount}."
+        
+        # Fallback to showing structured data in a readable format
+        lines = [line.strip() for line in content.split('\n') if line.strip() and not line.startswith('Column')]
+        if lines:
+            return f"From the data: {'. '.join(lines[:3])}."
+        
+        return "I found relevant data but couldn't extract a specific answer."
+    
+    def _extract_number(self, text: str) -> float:
+        """Extract largest number from text."""
+        import re
+        numbers = re.findall(r'\d+', text.replace(',', ''))
+        return max([float(n) for n in numbers]) if numbers else 0
+    
+    def _extract_company_name(self, text: str) -> str:
+        """Extract company name from structured data line."""
+        # Look for company name patterns
+        if 'Company:' in text:
+            parts = text.split('Company:')[1].split('|')[0].strip()
+            return parts
+        elif '|' in text:
+            # Assume first field is company
+            return text.split('|')[0].strip().replace('Row 1:', '').replace('Row 2:', '').replace('Row 3:', '').strip()
+        return "the company"
+    
+    def _format_revenue(self, amount: float) -> str:
+        """Format revenue amount in readable form."""
+        if amount >= 1e12:
+            return f"${amount/1e12:.1f} trillion"
+        elif amount >= 1e9:
+            return f"${amount/1e9:.1f} billion"
+        elif amount >= 1e6:
+            return f"${amount/1e6:.1f} million"
+        else:
+            return f"${amount:,.0f}"
+    
+    def _generate_procedural_answer(self, question: str, content_items: List[Dict]) -> str:
+        """Generate answer for procedural/how-to questions."""
+        best_content = content_items[0]['content']
+        
+        # Look for numbered steps or process information
+        lines = [line.strip() for line in best_content.split('\n') if line.strip()]
+        
+        steps = []
+        for line in lines:
+            if any(word in line.lower() for word in ['step', 'phase', 'first', 'then', 'next', 'finally']):
+                steps.append(line)
+        
+        if steps:
+            return "The process involves: " + ". ".join(steps[:4]) + "."
+        else:
+            return self._generate_general_answer(question, content_items)
+    
+    def _generate_general_answer(self, question: str, content_items: List[Dict]) -> str:
+        """Generate general answer when specific patterns don't match."""
+        best_content = content_items[0]['content']
+        
+        # Extract the most informative sentences
+        sentences = [s.strip() for s in best_content.split('.') if s.strip() and len(s) > 20]
+        
+        if sentences:
+            # Take first 2-3 sentences for a comprehensive but concise answer
+            answer_sentences = sentences[:3]
+            answer = ". ".join(answer_sentences)
+            if not answer.endswith('.'):
+                answer += '.'
+            return answer
+        else:
+            # Fallback to first part of content
+            return best_content[:300] + ("..." if len(best_content) > 300 else "")
+    
+    def _format_content_for_display(self, content: str) -> str:
+        """Format content for better display in answers."""
+        try:
+            # Remove excessive newlines and whitespace
+            content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)
+            content = content.strip()
+            
+            # Handle structured data (CSV/Excel) differently
+            if content.startswith('##') or '###' in content:
+                # This is structured markdown content - preserve formatting
+                lines = content.split('\n')
+                formatted_lines = []
+                
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('####'):
+                        formatted_lines.append(f"\n**{line[4:].strip()}**")
+                    elif line.startswith('###'):
+                        formatted_lines.append(f"\n**{line[3:].strip()}:**")
+                    elif line.startswith('##'):
+                        formatted_lines.append(f"**{line[2:].strip()}:**")
+                    elif line.startswith('- '):
+                        formatted_lines.append(f"  • {line[2:]}")
+                    elif line and not line.startswith('#'):
+                        formatted_lines.append(line)
+                
+                return '\n'.join(formatted_lines)
+            else:
+                # Regular text content - improve paragraph structure
+                paragraphs = content.split('\n\n')
+                formatted_paragraphs = []
+                
+                for para in paragraphs:
+                    para = para.strip().replace('\n', ' ')
+                    if para:
+                        formatted_paragraphs.append(para)
+                
+                return '\n\n'.join(formatted_paragraphs)
+                
+        except Exception as e:
+            logger.warning(f"Content formatting failed: {str(e)}")
+            return content
 
 
 class MultiModalRAGSystem:
