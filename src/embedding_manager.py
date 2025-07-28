@@ -25,7 +25,8 @@ class EmbeddingManager:
                  embedding_model: str = "local",  # Changed default to "local" for beginners
                  model_name: str = None,  # Will auto-select appropriate model
                  cache_embeddings: bool = True,
-                 cache_dir: str = "cache/embeddings"):
+                 cache_dir: str = "cache/embeddings",
+                 dimensions: int = None):  # OpenAI embeddings dimension control
         
         self.embedding_model = embedding_model
         
@@ -42,6 +43,7 @@ class EmbeddingManager:
             
         self.cache_embeddings = cache_embeddings
         self.cache_dir = cache_dir
+        self.dimensions = dimensions  # Store dimensions for OpenAI models
 
         # Set up logging
         logging.basicConfig(level=logging.INFO)
@@ -68,9 +70,9 @@ class EmbeddingManager:
         return cls(embedding_model="local", model_name=model_name)
     
     @classmethod
-    def create_openai(cls, model_name: str = "text-embedding-ada-002"):
+    def create_openai(cls, model_name: str = "text-embedding-ada-002", dimensions: int = None):
         """Create an OpenAI embedding manager (requires API key)."""
-        return cls(embedding_model="openai", model_name=model_name)
+        return cls(embedding_model="openai", model_name=model_name, dimensions=dimensions)
     
     @classmethod
     def create_colpali(cls, model_name: str = "vidore/colqwen2-v1.0"):
@@ -90,8 +92,16 @@ class EmbeddingManager:
                 raise ValueError("OpenAI API key not found. Please set OPENAI_API_KEY environment variable.")
             
             self.client = OpenAI(api_key=api_key)
-            self.embedding_dimension = 1536  # ada-002 dimension
-            self.logger.info(f"✅ Initialized OpenAI embeddings with model: {self.model_name}")
+            
+            # Validate actual embedding dimensions by testing a small sample
+            self.embedding_dimension = self._validate_openai_dimensions()
+            
+            if self.dimensions and self.embedding_dimension != self.dimensions:
+                self.logger.warning(f"⚠️ DIMENSION MISMATCH: Requested {self.dimensions} but OpenAI returns {self.embedding_dimension}")
+                self.logger.warning(f"   - This suggests the dimensions parameter is not working for model: {self.model_name}")
+                self.logger.warning(f"   - Proceeding with actual dimensions: {self.embedding_dimension}")
+            
+            self.logger.info(f"✅ Initialized OpenAI embeddings with model: {self.model_name}, actual dimensions: {self.embedding_dimension}")
 
         elif self.embedding_model == "local":
             # Lazy import SentenceTransformer
@@ -118,6 +128,58 @@ class EmbeddingManager:
 
         else:
             raise ValueError(f"Unsupported embedding model: {self.embedding_model}")
+    
+    def _validate_openai_dimensions(self) -> int:
+        """
+        Validate actual OpenAI embedding dimensions by making a test API call.
+        This helps us detect if the dimensions parameter is working correctly.
+        """
+        self.logger.info("🔍 Validating OpenAI embedding dimensions with test call...")
+        
+        try:
+            # Test with a simple text
+            test_text = "test"
+            
+            # Prepare embedding request parameters
+            embedding_params = {
+                'model': self.model_name,
+                'input': test_text
+            }
+            
+            # Add dimensions parameter if requested
+            if self.dimensions and 'text-embedding-3' in self.model_name:
+                embedding_params['dimensions'] = self.dimensions
+                self.logger.info(f"🔧 Testing with dimensions parameter: {self.dimensions}")
+            else:
+                self.logger.info(f"🔧 Testing without dimensions parameter")
+            
+            # Make the test API call
+            response = self.client.embeddings.create(**embedding_params)
+            
+            # Check actual dimensions
+            test_embedding = np.array(response.data[0].embedding, dtype=np.float32)
+            actual_dimensions = test_embedding.shape[0]
+            
+            self.logger.info(f"✅ OpenAI dimension validation complete:")
+            self.logger.info(f"   - Model: {self.model_name}")
+            self.logger.info(f"   - Requested dimensions: {self.dimensions}")
+            self.logger.info(f"   - Actual dimensions: {actual_dimensions}")
+            
+            return actual_dimensions
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to validate OpenAI dimensions: {str(e)}")
+            
+            # Fallback to model defaults if validation fails
+            if 'text-embedding-3-large' in self.model_name:
+                fallback_dim = 3072
+            elif 'text-embedding-3-small' in self.model_name:
+                fallback_dim = 1536
+            else:  # ada-002 and others
+                fallback_dim = 1536
+                
+            self.logger.warning(f"⚠️ Using fallback dimensions: {fallback_dim}")
+            return fallback_dim
         
     def create_embedding(self, text: str, cache_key: str = None) -> np.ndarray:
         """
@@ -172,12 +234,29 @@ class EmbeddingManager:
         """Create embedding using OpenAI API."""
 
         try: 
-            response = self.client.embeddings.create(
-                model=self.model_name,
-                input=text.strip()
-            )
-
+            # Prepare embedding request parameters
+            embedding_params = {
+                'model': self.model_name,
+                'input': text.strip()
+            }
+            
+            # Add dimensions parameter for supported models (text-embedding-3-*)
+            # Note: We use self.dimensions (requested) not self.embedding_dimension (actual)
+            # because we want to be consistent in our API calls
+            if self.dimensions and 'text-embedding-3' in self.model_name:
+                embedding_params['dimensions'] = self.dimensions
+                
+            response = self.client.embeddings.create(**embedding_params)
             embedding = np.array(response.data[0].embedding, dtype=np.float32)
+            
+            # Validate that we get expected dimensions (should match our validated dimension)
+            actual_dimensions = embedding.shape[0]
+            if actual_dimensions != self.embedding_dimension:
+                self.logger.error(f"❌ UNEXPECTED DIMENSION CHANGE!")
+                self.logger.error(f"   - Expected: {self.embedding_dimension} (from validation)")
+                self.logger.error(f"   - Received: {actual_dimensions}")
+                raise ValueError(f"Embedding dimensions changed unexpectedly: {actual_dimensions} vs {self.embedding_dimension}")
+            
             return embedding
         
         except Exception as e:
@@ -324,14 +403,30 @@ class EmbeddingManager:
         """Create batch embeddings using OpenAI API."""
 
         try:
-            response = self.client.embeddings.create(
-                model=self.model_name,
-                input=[text.strip() for text in texts]
-            )
+            # Prepare embedding request parameters
+            embedding_params = {
+                'model': self.model_name,
+                'input': [text.strip() for text in texts]
+            }
+            
+            # Add dimensions parameter for supported models (text-embedding-3-*)
+            if self.dimensions and 'text-embedding-3' in self.model_name:
+                embedding_params['dimensions'] = self.dimensions
+                
+            response = self.client.embeddings.create(**embedding_params)
 
             embeddings = []
-            for data in response.data:
+            for i, data in enumerate(response.data):
                 embedding = np.array(data.embedding, dtype=np.float32)
+                
+                # Validate dimensions consistency
+                actual_dimensions = embedding.shape[0]
+                if actual_dimensions != self.embedding_dimension:
+                    self.logger.error(f"❌ BATCH DIMENSION MISMATCH!")
+                    self.logger.error(f"   - Expected: {self.embedding_dimension}")
+                    self.logger.error(f"   - Received: {actual_dimensions}")
+                    raise ValueError(f"Batch embedding {i} has wrong dimensions: {actual_dimensions} vs {self.embedding_dimension}")
+                
                 embeddings.append(embedding)
 
             return embeddings
@@ -529,25 +624,53 @@ class VectorDatabase:
         
         Like adding new books to your library with their catalog information.
         """
-        # Lazy import faiss
-        import faiss
-        
-        if len(embeddings) != len(metadata):
-            raise ValueError("Number of embeddings must match number of metadata entries")
-        
-        # Convert to numpy array for FAISS
-        embeddings_array = np.array(embeddings, dtype=np.float32)
-        
-        # Normalize vectors for cosine similarity
-        faiss.normalize_L2(embeddings_array)
-        
-        # Train index if needed (for IVF)
-        if self.index_type == "ivf" and not self.index.is_trained:
-            self.index.train(embeddings_array)
-        
-        # Add to index
-        start_idx = self.index.ntotal
-        self.index.add(embeddings_array)
+        try:
+            # Lazy import faiss
+            import faiss
+            
+            if len(embeddings) != len(metadata):
+                raise ValueError(f"Number of embeddings ({len(embeddings)}) must match number of metadata entries ({len(metadata)})")
+            
+            # Validate embeddings before processing
+            for i, embedding in enumerate(embeddings):
+                if not isinstance(embedding, np.ndarray):
+                    raise ValueError(f"Embedding {i} is not a numpy array, got {type(embedding)}")
+                if embedding.shape != (self.dimension,):
+                    raise ValueError(f"Embedding {i} has shape {embedding.shape}, expected ({self.dimension},)")
+                if not np.isfinite(embedding).all():
+                    raise ValueError(f"Embedding {i} contains non-finite values")
+            
+            # Convert to numpy array for FAISS
+            embeddings_array = np.array(embeddings, dtype=np.float32)
+            
+            # Validate final array shape
+            expected_shape = (len(embeddings), self.dimension)
+            if embeddings_array.shape != expected_shape:
+                raise ValueError(f"Embeddings array has shape {embeddings_array.shape}, expected {expected_shape}")
+            
+            # Normalize vectors for cosine similarity
+            faiss.normalize_L2(embeddings_array)
+            
+            # Train index if needed (for IVF)
+            if self.index_type == "ivf" and not self.index.is_trained:
+                self.index.train(embeddings_array)
+            
+            # Add to index
+            start_idx = self.index.ntotal
+            self.index.add(embeddings_array)
+            
+        except Exception as e:
+            # Log detailed error information
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"❌ Vector database add_vectors failed: {str(e)}")
+            logger.error(f"   - Embeddings count: {len(embeddings) if embeddings else 0}")
+            logger.error(f"   - Metadata count: {len(metadata) if metadata else 0}")
+            logger.error(f"   - Expected dimension: {self.dimension}")
+            if embeddings:
+                logger.error(f"   - First embedding shape: {embeddings[0].shape if hasattr(embeddings[0], 'shape') else 'N/A'}")
+                logger.error(f"   - First embedding type: {type(embeddings[0])}")
+            raise e
         
         # Store metadata
         for i, meta in enumerate(metadata):
