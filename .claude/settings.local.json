@@ -12,7 +12,8 @@
       "Bash(grep:*)",
       "Bash(git checkout:*)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(streamlit run:*)"
     ],
     "deny": []
   }
