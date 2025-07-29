@@ -173,7 +173,7 @@ class TokenCounter:
     
     def get_comprehensive_breakdown(self, query: str, answer: str, 
                                    vlm_tokens: int = 0, sf_tokens: int = 0, 
-                                   reranker_tokens: int = 10) -> Dict[str, int]:
+                                   text_tokens: int = 0, reranker_tokens: int = 10) -> Dict[str, int]:
         """Get complete token breakdown"""
         query_tokens = self.count_tokens(query)
         response_tokens = self.count_tokens(answer)
@@ -182,9 +182,10 @@ class TokenCounter:
             'query_tokens': query_tokens,
             'vlm_analysis_tokens': vlm_tokens,
             'salesforce_api_tokens': sf_tokens,
+            'text_rag_tokens': text_tokens,
             'reranker_tokens': reranker_tokens,
             'response_tokens': response_tokens,
-            'total_tokens': query_tokens + vlm_tokens + sf_tokens + reranker_tokens + response_tokens
+            'total_tokens': query_tokens + vlm_tokens + sf_tokens + text_tokens + reranker_tokens + response_tokens
         }
 
 class SimpleRAGOrchestrator:
@@ -634,7 +635,10 @@ class SimpleRAGOrchestrator:
                         'score': text_results.get('confidence', 0.5),
                         'sources': text_results.get('sources', []),
                         'metadata': {'chunks_used': text_results.get('chunks_used', 0)},
-                        'token_info': {'query_time': time.time() - text_start_time}
+                        'token_info': {
+                            'query_time': time.time() - text_start_time,
+                            'text_tokens': text_results.get('tokens_used', 0)
+                        }
                     })
                     logger.info(f"✅ Text RAG returned result (confidence: {text_results.get('confidence', 0):.3f})")
                 else:
@@ -661,7 +665,7 @@ class SimpleRAGOrchestrator:
                                    'page': best_result.metadata.get('page', 1),
                                    'score': best_result.score}],
                         'metadata': best_result.metadata,
-                        'token_info': {'query_time': metrics.query_time, 'vlm_tokens': 245}
+                        'token_info': {'query_time': metrics.query_time, 'vlm_tokens': best_result.metadata.get('vlm_tokens', 0)}
                     })
                     logger.info(f"✅ ColPali returned {len(colpali_results)} results (best score: {best_result.score:.3f})")
                     logger.info(f"🎯 ColPali content preview: {best_result.content[:100]}...")
@@ -682,7 +686,7 @@ class SimpleRAGOrchestrator:
                     best_sf = max(sf_results, key=lambda x: x.get('relevance_score', 0))
                     
                     # Use enhanced Salesforce response generation with LLM synthesis
-                    enhanced_answer = self.sf_connector.generate_enhanced_sf_response(user_query, [best_sf])
+                    enhanced_answer, sf_tokens_used = self.sf_connector.generate_enhanced_sf_response(user_query, [best_sf])
                     
                     candidates.append({
                         'success': True,
@@ -692,7 +696,7 @@ class SimpleRAGOrchestrator:
                         'sources': [{'title': best_sf.get('title', 'Unknown KB'),
                                    'score': best_sf.get('relevance_score', 0.5)}],
                         'metadata': {'article_id': best_sf.get('id', ''), 'source_url': best_sf.get('source_url', '')},
-                        'token_info': {'query_time': time.time() - sf_start_time, 'sf_tokens': 156}
+                        'token_info': {'query_time': time.time() - sf_start_time, 'sf_tokens': sf_tokens_used}
                     })
                     logger.info(f"✅ Salesforce returned {len(sf_results)} articles (best score: {best_sf.get('relevance_score', 0):.3f})")
                 else:
@@ -722,6 +726,7 @@ class SimpleRAGOrchestrator:
                     answer=selected['answer'],
                     vlm_tokens=selected.get('token_info', {}).get('vlm_tokens', 0),
                     sf_tokens=selected.get('token_info', {}).get('sf_tokens', 0),
+                    text_tokens=selected.get('token_info', {}).get('text_tokens', 0),
                     reranker_tokens=10
                 )
                 
@@ -759,7 +764,8 @@ class SimpleRAGOrchestrator:
             query=user_query,
             answer=cleaned_answer,
             vlm_tokens=best_candidate.get('token_info', {}).get('vlm_tokens', 0),
-            sf_tokens=best_candidate.get('token_info', {}).get('sf_tokens', 0)
+            sf_tokens=best_candidate.get('token_info', {}).get('sf_tokens', 0),
+            text_tokens=best_candidate.get('token_info', {}).get('text_tokens', 0)
         )
         
         return {
@@ -1280,22 +1286,86 @@ def main():
                         st.markdown(f"**🤖 Answer:**")
                         st.markdown(result['answer'])
                         
-                        # Token breakdown
+                        # Token breakdown - compact and elegant design
                         if 'token_breakdown' in result:
                             tokens = result['token_breakdown']
-                            col_t1, col_t2, col_t3, col_t4, col_t5, col_t6 = st.columns(6)
-                            with col_t1:
-                                st.metric("Query", tokens['query_tokens'])
-                            with col_t2:
-                                st.metric("VLM", tokens['vlm_analysis_tokens'])
-                            with col_t3:
-                                st.metric("Salesforce", tokens['salesforce_api_tokens'])
-                            with col_t4:
-                                st.metric("Re-rank", tokens['reranker_tokens'])
-                            with col_t5:
-                                st.metric("Response", tokens['response_tokens'])
-                            with col_t6:
-                                st.metric("Total", tokens['total_tokens'])
+                            
+                            # Custom CSS for compact token display
+                            st.markdown("""
+                            <style>
+                            .token-container {
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                background-color: #f8f9fa;
+                                border-radius: 8px;
+                                padding: 12px 16px;
+                                margin: 8px 0;
+                                border-left: 4px solid #1f77b4;
+                            }
+                            .token-item {
+                                text-align: center;
+                                flex: 1;
+                                padding: 0 8px;
+                            }
+                            .token-label {
+                                font-size: 11px;
+                                font-weight: 500;
+                                color: #666;
+                                margin-bottom: 2px;
+                                text-transform: uppercase;
+                                letter-spacing: 0.5px;
+                            }
+                            .token-value {
+                                font-size: 16px;
+                                font-weight: 600;
+                                color: #1f77b4;
+                                margin: 0;
+                            }
+                            .token-total {
+                                border-left: 1px solid #ddd;
+                                padding-left: 12px !important;
+                            }
+                            .token-total .token-value {
+                                color: #2e7d2e;
+                                font-size: 18px;
+                            }
+                            </style>
+                            """, unsafe_allow_html=True)
+                            
+                            # Compact token display with 7 columns including TEXT RAG
+                            st.markdown(f"""
+                            <div class="token-container">
+                                <div class="token-item">
+                                    <div class="token-label">Query</div>
+                                    <div class="token-value">{tokens['query_tokens']}</div>
+                                </div>
+                                <div class="token-item">
+                                    <div class="token-label">Text RAG</div>
+                                    <div class="token-value">{tokens['text_rag_tokens']}</div>
+                                </div>
+                                <div class="token-item">
+                                    <div class="token-label">VLM</div>
+                                    <div class="token-value">{tokens['vlm_analysis_tokens']}</div>
+                                </div>
+                                <div class="token-item">
+                                    <div class="token-label">Salesforce</div>
+                                    <div class="token-value">{tokens['salesforce_api_tokens']}</div>
+                                </div>
+                                <div class="token-item">
+                                    <div class="token-label">Re-rank</div>
+                                    <div class="token-value">{tokens['reranker_tokens']}</div>
+                                </div>
+                                <div class="token-item">
+                                    <div class="token-label">Response</div>
+                                    <div class="token-value">{tokens['response_tokens']}</div>
+                                </div>
+                                <div class="token-item token-total">
+                                    <div class="token-label">Total</div>
+                                    <div class="token-value">{tokens['total_tokens']}</div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
                         
                         # Rejected sources (transparency)
                         if result.get('rejected_sources'):
