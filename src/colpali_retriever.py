@@ -349,7 +349,7 @@ class ColPaliRetriever:
                     page_number = best_page_idx + 1  # Convert to 1-based
                     
                     # Generate VLM-based answer instead of simple description
-                    content = self._generate_vlm_answer(query, doc_id, best_page_idx, doc_info)
+                    content, vlm_tokens = self._generate_vlm_answer(query, doc_id, best_page_idx, doc_info)
                     
                     enhanced_metadata = {
                         'filename': doc_info['filename'],
@@ -359,7 +359,8 @@ class ColPaliRetriever:
                         'best_page_index': best_page_idx,
                         'retriever_type': 'visual',
                         'model_name': self.model_name,
-                        'scoring_method': 'maxsim'
+                        'scoring_method': 'maxsim',
+                        'vlm_tokens': vlm_tokens  # Add token information
                     }
                     
                     result = RetrievalResult(
@@ -758,7 +759,7 @@ class ColPaliRetriever:
         
         return response
     
-    def _generate_vlm_answer(self, query: str, doc_id: str, page_idx: int, doc_info: Dict) -> str:
+    def _generate_vlm_answer(self, query: str, doc_id: str, page_idx: int, doc_info: Dict) -> tuple[str, int]:
         """Generate query-specific answer using live VLM analysis."""
         
         page_number = page_idx + 1
@@ -770,10 +771,10 @@ class ColPaliRetriever:
                 page_image = self._get_page_image(doc_id, page_idx)
                 if page_image:
                     logger.info(f"🎯 Performing live query-specific VLM analysis for: '{query[:50]}...'")
-                    vlm_response = self._analyze_image_with_vlm(query, page_image, filename, page_number)
+                    vlm_response, vlm_tokens = self._analyze_image_with_vlm(query, page_image, filename, page_number)
                     if vlm_response and len(vlm_response.strip()) > 50:
-                        logger.info(f"✅ Live VLM analysis successful: {len(vlm_response)} chars")
-                        return vlm_response
+                        logger.info(f"✅ Live VLM analysis successful: {len(vlm_response)} chars, {vlm_tokens} tokens")
+                        return vlm_response, vlm_tokens
                     else:
                         logger.warning(f"⚠️ VLM analysis returned minimal content")
         
@@ -795,7 +796,7 @@ class ColPaliRetriever:
                     content_type = self._analyze_visual_content_type(relevant_excerpt, query)
                     response = self._format_visual_response(relevant_excerpt, query, filename, page_number, content_type)
                     
-                    return response
+                    return response, 0  # No tokens used for text extraction
         
         except Exception as e:
             logger.debug(f"Text extraction failed for {filename} page {page_idx}: {e}")
@@ -804,14 +805,18 @@ class ColPaliRetriever:
         logger.info(f"🔧 Generating contextual response for query keywords")
         contextual_response = self._generate_contextual_response(query, filename, page_number)
         if contextual_response:
-            return contextual_response
+            return contextual_response, 0  # No tokens used for contextual response
         
         # Step 4: Final fallback - but make it informative about the query specificity issue
         logger.warning(f"⚠️ All analysis methods failed for query: '{query}'")
-        return f"**Page {page_number} of '{filename}' identified as visually relevant to your query.**\n\nColPali's similarity scoring determined this page contains content related to: *'{query}'*\n\nHowever, detailed query-specific analysis was not available. This may be due to:\n- VLM analysis temporarily unavailable\n- PDF file no longer accessible for text extraction\n- Network connectivity issues\n\n📄 **Source**: {filename}, page {page_number}\n🔍 **Query**: {query}"
+        fallback_response = f"**Page {page_number} of '{filename}' identified as visually relevant to your query.**\n\nColPali's similarity scoring determined this page contains content related to: *'{query}'*\n\nHowever, detailed query-specific analysis was not available. This may be due to:\n- VLM analysis temporarily unavailable\n- PDF file no longer accessible for text extraction\n- Network connectivity issues\n\n📄 **Source**: {filename}, page {page_number}\n🔍 **Query**: {query}"
+        return fallback_response, 0  # No tokens used for fallback
     
-    def _analyze_image_with_vlm(self, query: str, image: Image.Image, filename: str, page_number: int) -> str:
-        """Send image to VLM for analysis."""
+    def _analyze_image_with_vlm(self, query: str, image: Image.Image, filename: str, page_number: int) -> tuple[str, int]:
+        """
+        Send image to VLM for analysis.
+        Returns: (answer, tokens_used)
+        """
         
         try:
             # Convert PIL image to base64 for OpenAI API
@@ -866,16 +871,17 @@ Your response should:
             )
             
             answer = response.choices[0].message.content
+            tokens_used = response.usage.total_tokens if response.usage else 0
             
             # Add source attribution
             attributed_answer = f"{answer}\n\n📄 Source: {filename}, page {page_number}"
             
-            logger.info(f"✅ VLM analysis completed for {filename} page {page_number}")
-            return attributed_answer
+            logger.info(f"✅ VLM analysis completed for {filename} page {page_number}: {tokens_used} tokens")
+            return attributed_answer, tokens_used
             
         except Exception as e:
             logger.error(f"❌ VLM analysis failed: {e}")
-            return None
+            return None, 0
     
     def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive statistics including visual-specific info."""

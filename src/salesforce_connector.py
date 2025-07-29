@@ -165,13 +165,14 @@ class SalesforceConnector:
             self.logger.error(f"Failed to initialize OpenAI client: {e}")
             return False
     
-    def _generate_llm_synthesis_answer(self, query: str, article: Dict) -> str:
+    def _generate_llm_synthesis_answer(self, query: str, article: Dict) -> tuple[str, int]:
         """
         Generate query-specific answer using LLM synthesis (similar to ColPali's VLM approach).
+        Returns: (answer, tokens_used)
         """
         if not self.llm_available or not self.openai_client:
             self.logger.warning("LLM synthesis not available, using fallback formatting")
-            return self._fallback_format_content(article)
+            return self._fallback_format_content(article), 0
         
         try:
             title = article.get('title', 'Knowledge Article')
@@ -225,12 +226,12 @@ Your response should:
             
             self.logger.info(f"🎯 LLM synthesis successful: {tokens_used} tokens, {len(answer)} chars")
             
-            return answer
+            return answer, tokens_used
             
         except Exception as e:
             self.logger.error(f"❌ LLM synthesis failed: {e}")
             # Graceful fallback to basic formatting
-            return self._fallback_format_content(article)
+            return self._fallback_format_content(article), 0
     
     def _fallback_format_content(self, article: Dict) -> str:
         """Fallback formatting method when LLM synthesis is not available."""
@@ -1212,13 +1213,14 @@ Your response should:
         
         return True
     
-    def generate_enhanced_sf_response(self, query: str, sf_results: List[Dict]) -> str:
+    def generate_enhanced_sf_response(self, query: str, sf_results: List[Dict]) -> tuple[str, int]:
         """
         Generate enhanced Salesforce response using LLM synthesis.
         This is the main method that should be called for Salesforce responses.
+        Returns: (answer, tokens_used)
         """
         if not sf_results:
-            return "No Salesforce content available"
+            return "No Salesforce content available", 0
         
         # Use the best result (highest relevance score)
         best_result = sf_results[0]
@@ -1235,12 +1237,12 @@ Your response should:
                     'clean_content': best_result.get('clean_content', '')
                 }
                 
-                # Generate LLM synthesis answer
-                llm_response = self._generate_llm_synthesis_answer(query, article_data)
+                # Generate LLM synthesis answer with token count
+                llm_response, tokens_used = self._generate_llm_synthesis_answer(query, article_data)
                 
                 if llm_response and not llm_response.startswith("LLM synthesis failed"):
-                    self.logger.info(f"✅ LLM synthesis successful, returning enhanced response")
-                    return llm_response
+                    self.logger.info(f"✅ LLM synthesis successful, returning enhanced response with {tokens_used} tokens")
+                    return llm_response, tokens_used
                 else:
                     self.logger.warning("⚠️ LLM synthesis returned empty/failed, using fallback")
             else:
@@ -1251,7 +1253,7 @@ Your response should:
         
         # Step 2: Fallback to basic formatting
         self.logger.info("📝 Using fallback formatting for Salesforce response")
-        return self._fallback_format_content(best_result)
+        return self._fallback_format_content(best_result), 0
         
     # 🧪 TESTING AND DEMONSTRATION METHODS
     

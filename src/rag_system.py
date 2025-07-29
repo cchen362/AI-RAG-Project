@@ -401,7 +401,8 @@ class RAGSystem:
                 'answer': response.get('answer', ''),
                 'sources': self._format_sources(search_results),
                 'confidence': response.get('confidence', 0.0),
-                'chunks_used': len(search_results)
+                'chunks_used': len(search_results),
+                'tokens_used': response.get('tokens_used', 0)
             }
             
         except Exception as e:
@@ -542,11 +543,12 @@ class RAGSystem:
             # Try LLM synthesis first (if available)
             if self.openai_client:
                 logger.info(f"🎯 Using LLM synthesis for TEXT RAG answer generation")
-                answer = self._generate_llm_synthesis_answer(question, relevant_content)
+                answer, tokens_used = self._generate_llm_synthesis_answer(question, relevant_content)
                 if answer:
                     return {
                         'answer': answer,
-                        'confidence': max_confidence
+                        'confidence': max_confidence,
+                        'tokens_used': tokens_used
                     }
             
             # Fallback to basic sentence extraction if LLM fails
@@ -564,14 +566,15 @@ class RAGSystem:
             
             return {
                 'answer': answer,
-                'confidence': max_confidence
+                'confidence': max_confidence,
+                'tokens_used': 0  # Fallback methods don't use tokens
             }
             
         except Exception as e:
             logger.error(f"❌ Enhanced answer generation failed: {str(e)}")
             return None
     
-    def _generate_llm_synthesis_answer(self, question: str, relevant_content: List[Dict]) -> str:
+    def _generate_llm_synthesis_answer(self, question: str, relevant_content: List[Dict]) -> tuple[str, int]:
         """Generate answer using LLM synthesis (similar to ColPali's VLM approach)."""
         try:
             # Prepare context from search results (same as debug app)
@@ -621,12 +624,13 @@ Your response should:
             )
             
             answer = response.choices[0].message.content
-            logger.info(f"✅ LLM synthesis generated {len(answer)} chars for TEXT RAG")
-            return answer
+            tokens_used = response.usage.total_tokens if response.usage else 0
+            logger.info(f"✅ LLM synthesis generated {len(answer)} chars, {tokens_used} tokens for TEXT RAG")
+            return answer, tokens_used
             
         except Exception as e:
             logger.error(f"❌ LLM synthesis failed: {e}")
-            return None
+            return None, 0
     
     def _classify_query_type(self, question: str) -> str:
         """Classify query type to determine appropriate response style."""
