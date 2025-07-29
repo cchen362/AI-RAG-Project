@@ -19,111 +19,72 @@ class CrossEncoderReRanker:
     """
     
     def __init__(self, model_name: str = 'BAAI/bge-reranker-base', 
-                 relevance_threshold: float = 0.3):
+                 relevance_threshold: float = 0.0):
         """
         Initialize the cross-encoder re-ranker.
         
         Args:
             model_name: HuggingFace model for cross-encoding
-            relevance_threshold: Minimum score to consider a source relevant
+            relevance_threshold: Deprecated - threshold removed for better reliability
         """
         self.model_name = model_name
-        self.threshold = relevance_threshold
+        self.threshold = relevance_threshold  # Kept for compatibility but not used
         self.model = None
         self.is_initialized = False
         
         logger.info(f"🎯 CrossEncoderReRanker configured with model: {model_name}")
     
-    def _normalize_content_for_ranking(self, content: str, source_type: str) -> str:
-        """
-        Normalize content to remove formatting bias in re-ranking.
-        
-        The BGE re-ranker should focus on content relevance, not presentation quality.
-        This prevents well-formatted but irrelevant sources from getting unfair advantage.
-        """
-        import re
-        
-        if not content or not content.strip():
-            return ""
-        
-        # Clean the content for fair comparison
-        normalized = content
-        
-        # Remove markdown formatting that can bias the re-ranker
-        normalized = re.sub(r'\*\*(.*?)\*\*', r'\1', normalized)  # **bold** -> bold
-        normalized = re.sub(r'\*(.*?)\*', r'\1', normalized)      # *italic* -> italic
-        normalized = re.sub(r'#{1,6}\s*', '', normalized)         # ### headers -> headers
-        normalized = re.sub(r'`(.*?)`', r'\1', normalized)        # `code` -> code
-        
-        # Remove common ColPali formatting patterns that bias scoring
-        normalized = re.sub(r'\*\*Page \d+ of [\'"][^\'"]*[\'"]:\*\*\s*', '', normalized)
-        normalized = re.sub(r'📄 \*\*Source\*\*:.*?(?=\n|$)', '', normalized)
-        normalized = re.sub(r'🔍 \*\*Query Context\*\*:.*?(?=\n|$)', '', normalized)
-        normalized = re.sub(r'🔍 \*\*Relevance\*\*:.*?(?=\n|$)', '', normalized)
-        
-        # Remove excessive emojis and special characters that don't add content value
-        normalized = re.sub(r'[📄🔍📊🎯✅❌⚠️💡🖼️🏢📝]', '', normalized)
-        
-        # Clean up whitespace
-        normalized = re.sub(r'\n\s*\n\s*\n+', '\n\n', normalized)  # Multiple newlines -> double
-        normalized = re.sub(r'^\s+|\s+$', '', normalized)          # Trim
-        
-        # Truncate very long content to prevent length bias
-        max_length = 1000  # BGE models work best with shorter text
-        if len(normalized) > max_length:
-            # Try to break at sentence boundary
-            truncated = normalized[:max_length]
-            last_period = truncated.rfind('.')
-            if last_period > max_length * 0.7:  # If period is reasonably close to end
-                normalized = truncated[:last_period+1]
-            else:
-                normalized = truncated + "..."
-        
-        # Add source type context for better scoring
-        type_prefix = {
-            'text': 'Document content:',
-            'colpali': 'Visual document content:',
-            'salesforce': 'Knowledge base content:'
-        }.get(source_type, 'Content:')
-        
-        result = f"{type_prefix} {normalized}".strip()
-        
-        logger.debug(f"📝 Normalized {source_type} content: {len(content)} -> {len(result)} chars")
-        return result
     
-    def _calculate_combined_score(self, original_score: float, rerank_score: float, source_type: str) -> float:
+    
+    
+    def _calculate_simple_combined_score(self, original_score: float, rerank_score: float, source_type: str, bias_colpali: bool) -> float:
         """
-        Calculate combined score from original retrieval confidence and re-ranker score.
+        Simple combined scoring with direct bias for chart/performance queries.
         
-        This prevents the re-ranker from completely overriding retrieval quality,
-        while still allowing semantic re-ranking to improve selection.
+        This replaces the complex fitness scoring with straightforward logic.
         """
-        # Source-specific minimum thresholds (stricter for visual sources)
+        is_explicit_chart = getattr(self, '_current_is_explicit_chart', False)
+        # Source-specific minimum thresholds
         min_thresholds = {
-            'text': 0.15,        # Text RAG is generally reliable
-            'colpali': 0.4,      # ColPali needs higher confidence to be relevant
-            'salesforce': 0.2    # Salesforce varies in quality
+            'text': 0.15,
+            'colpali': 0.20,  # Further reduced to 0.20 to help ColPali compete
+            'salesforce': 0.2
         }
         
         min_threshold = min_thresholds.get(source_type, 0.2)
         
-        # If original score is below threshold, heavily penalize
+        # Basic combined score with source-specific weighting
         if original_score < min_threshold:
-            penalty_factor = 0.3  # Reduce score significantly
-            combined = (original_score * 0.4 + rerank_score * 0.6) * penalty_factor
+            # Heavy penalty for low original scores
+            combined = (original_score * 0.4 + rerank_score * 0.6) * 0.3
         else:
-            # Balanced combination for good original scores
-            # Weight slightly toward re-ranker for semantic understanding
-            combined = original_score * 0.3 + rerank_score * 0.7
+            # Different weighting for visual vs text sources
+            if source_type == 'colpali':
+                # For ColPali, weight original score more heavily since cross-encoder 
+                # doesn't handle visual content descriptions well
+                combined = original_score * 0.6 + rerank_score * 0.4
+            else:
+                # Standard balanced combination for text sources
+                combined = original_score * 0.3 + rerank_score * 0.7
         
-        # Boost text sources slightly for factual queries
-        if source_type == 'text' and original_score > 0.4:
-            combined *= 1.1  # 10% boost for good text sources
+        # Apply direct bias for chart/performance queries
+        if bias_colpali and source_type == 'colpali':
+            if is_explicit_chart:
+                # Very strong bias for explicit chart queries like "based on the chart"
+                combined *= 2.5  # 150% boost - increased from 100%
+                logger.info(f"  Applied STRONG ColPali bias for explicit chart query: {combined:.3f}")
+            else:
+                # Strong bias for general chart/performance queries
+                combined *= 2.0  # 100% boost - increased from 50%
+                logger.info(f"  Applied ColPali performance/chart bias: {combined:.3f}")
+        elif source_type == 'text' and original_score > 0.4:
+            if not is_explicit_chart:  # Don't boost TEXT for explicit chart queries
+                combined *= 1.05  # Small boost for good text sources
+                logger.debug(f"  Applied TEXT boost: {combined:.3f}")
         
-        # Ensure score stays in reasonable range
-        combined = max(0.0, min(1.0, combined))
-        
-        return combined
+        # Ensure reasonable range
+        return max(0.0, min(1.0, combined))
+    
         
     def initialize(self) -> bool:
         """Initialize the cross-encoder model"""
@@ -174,6 +135,19 @@ class CrossEncoderReRanker:
         logger.info(f"🔍 Re-ranking {len(candidates)} sources for query: '{query[:50]}...'")
         start_time = time.time()
         
+        # Simple query analysis for direct bias
+        query_lower = query.lower()
+        is_chart_query = any(term in query_lower for term in ['chart', 'graph', 'diagram', 'figure', 'visualization'])
+        is_performance_query = any(term in query_lower for term in ['time', 'performance', 'speed', 'latency', 'rate'])
+        is_explicit_chart = 'based on the chart' in query_lower or 'from the chart' in query_lower
+        
+        bias_colpali = is_chart_query or is_performance_query
+        if bias_colpali:
+            logger.info(f"🎯 Chart/performance query detected - will boost ColPali scores (explicit_chart: {is_explicit_chart})")
+        
+        # Store for stronger bias logic
+        self._current_is_explicit_chart = is_explicit_chart
+        
         try:
             scored_candidates = []
             
@@ -187,8 +161,8 @@ class CrossEncoderReRanker:
                 answer_content = candidate.get('answer', '')
                 original_score = candidate.get('score', 0.0)
                 
-                # Normalize content for fair re-ranking comparison
-                normalized_content = self._normalize_content_for_ranking(answer_content, source_type)
+                # Use content as-is - let the source formatting help the re-ranker
+                normalized_content = answer_content
                 
                 # Skip sources with very low original confidence (likely irrelevant)
                 if original_score < 0.05:  # Very low threshold to filter obvious misses
@@ -205,9 +179,8 @@ class CrossEncoderReRanker:
                     else:
                         score = float(score)
                     
-                    # Combine original confidence with re-ranker score
-                    # Original score indicates retrieval relevance, re-ranker score indicates semantic relevance
-                    combined_score = self._calculate_combined_score(original_score, score, source_type)
+                    # Simple combined scoring with direct bias
+                    combined_score = self._calculate_simple_combined_score(original_score, score, source_type, bias_colpali)
                     
                     scored_candidates.append({
                         'source_type': source_type,
@@ -243,14 +216,8 @@ class CrossEncoderReRanker:
             best_candidate = scored_candidates[0]
             rejected_candidates = scored_candidates[1:]
             
-            # Check if best candidate meets threshold (using combined score)
-            if best_candidate['combined_score'] < self.threshold:
-                return {
-                    'success': False,
-                    'error': f'Best source combined score ({best_candidate["combined_score"]:.3f}) below threshold ({self.threshold})',
-                    'all_scores': [(c['source_type'], c['combined_score'], c['original_score'], c['rerank_score']) for c in scored_candidates],
-                    'ranking_time': ranking_time
-                }
+            # Always select the best candidate - let users judge quality
+            # Removed artificial threshold that was causing fallback behavior
             
             # Successful selection
             result = {

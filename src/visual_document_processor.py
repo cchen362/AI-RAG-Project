@@ -325,17 +325,45 @@ class VisualDocumentProcessor:
     def _generate_embeddings(self, images: List) -> torch.Tensor:
         """Generate ColPali embeddings for document images."""
         try:
-            # Prepare images for processing
+            # Validate inputs
+            if not images:
+                logger.error("❌ No images provided for embedding generation")
+                raise ValueError("No images to process")
+            
+            logger.info(f"🔄 Generating embeddings for {len(images)} images")
+            
+            # Prepare images for processing - ensure they're valid PIL images
             batch_images = []
-            for img in images:
-                # Convert PIL image to the format expected by ColPali
+            for i, img in enumerate(images):
+                if img is None:
+                    logger.warning(f"⚠️ Skipping None image at index {i}")
+                    continue
                 batch_images.append(img)
+            
+            if not batch_images:
+                logger.error("❌ No valid images found after filtering")
+                raise ValueError("No valid images to process")
+            
+            logger.info(f"✅ Prepared {len(batch_images)} valid images for processing")
             
             # Process images through ColPali with updated API handling
             with torch.no_grad():
+                embeddings = None
+                
+                # Try standard processing first
                 try:
-                    # Use updated ColQwen2 processor API
-                    batch_inputs = self.processor(images=batch_images, return_tensors="pt")
+                    logger.info("🔧 Attempting ColQwen2 process_images API...")
+                    batch_inputs = self.processor.process_images(batch_images)
+                    
+                    # Validate batch_inputs
+                    if batch_inputs is None:
+                        raise ValueError("Processor returned None for batch_inputs")
+                    
+                    # BatchFeature is the correct return type from ColQwen2 processor
+                    if not hasattr(batch_inputs, 'keys'):
+                        raise ValueError(f"Expected BatchFeature or dict from processor, got {type(batch_inputs)}")
+                    
+                    logger.info(f"✅ Processor returned: {list(batch_inputs.keys())}")
                     
                     # Move to device
                     for key in batch_inputs:
@@ -353,11 +381,27 @@ class VisualDocumentProcessor:
                     else:
                         embeddings = outputs
                     
+                    logger.info("✅ Standard processing succeeded")
+                    
                 except Exception as proc_err:
                     logger.warning(f"⚠️ Standard processing failed: {proc_err}, trying alternative")
-                    # Alternative processing approach
+                    
+                    # Alternative processing approach with better error handling
                     try:
-                        batch_inputs = self.processor(batch_images, return_tensors="pt")
+                        logger.info("🔧 Attempting ColQwen2 process_images fallback...")
+                        batch_inputs = self.processor.process_images(batch_images)
+                        
+                        # Validate batch_inputs before iterating
+                        if batch_inputs is None:
+                            raise ValueError("Alternative processor also returned None")
+                        
+                        # BatchFeature is the correct return type from ColQwen2 processor
+                        if not hasattr(batch_inputs, 'keys'):
+                            raise ValueError(f"Alternative processor returned {type(batch_inputs)}, expected BatchFeature or dict")
+                        
+                        logger.info(f"✅ Alternative processor returned: {list(batch_inputs.keys())}")
+                        
+                        # Safely move to device
                         for key in batch_inputs:
                             if isinstance(batch_inputs[key], torch.Tensor):
                                 batch_inputs[key] = batch_inputs[key].to(self.device)
@@ -367,19 +411,59 @@ class VisualDocumentProcessor:
                             embeddings = outputs.last_hidden_state
                         else:
                             embeddings = outputs
+                        
+                        logger.info("✅ Alternative processing succeeded")
+                        
                     except Exception as alt_err:
                         logger.error(f"❌ Alternative processing also failed: {alt_err}")
-                        raise
-            
-            # Return embeddings tensor
-            return embeddings
+                        # Try one more fallback approach
+                        try:
+                            logger.info("🔧 Attempting single image processing fallback...")
+                            single_embeddings = []
+                            
+                            for img in batch_images[:3]:  # Limit to prevent overwhelming
+                                single_input = self.processor.process_images([img])
+                                if single_input is not None and hasattr(single_input, 'keys'):
+                                    for key in single_input:
+                                        if isinstance(single_input[key], torch.Tensor):
+                                            single_input[key] = single_input[key].to(self.device)
+                                    
+                                    single_output = self.model(**single_input)
+                                    if hasattr(single_output, 'last_hidden_state'):
+                                        single_embeddings.append(single_output.last_hidden_state)
+                                    else:
+                                        single_embeddings.append(single_output)
+                            
+                            if single_embeddings:
+                                embeddings = torch.cat(single_embeddings, dim=0)
+                                logger.info("✅ Single image processing fallback succeeded")
+                            else:
+                                raise ValueError("All processing approaches failed")
+                                
+                        except Exception as final_err:
+                            logger.error(f"❌ Final fallback also failed: {final_err}")
+                            raise
+                
+                # Validate final embeddings
+                if embeddings is None:
+                    raise ValueError("All processing attempts returned None embeddings")
+                
+                if not isinstance(embeddings, torch.Tensor):
+                    raise ValueError(f"Expected torch.Tensor, got {type(embeddings)}")
+                
+                logger.info(f"✅ Generated embeddings shape: {embeddings.shape}")
+                logger.info(f"✅ Embeddings dtype: {embeddings.dtype}, device: {embeddings.device}")
+                return embeddings
             
         except Exception as e:
             logger.error(f"❌ Embedding generation failed: {e}")
-            # Return dummy embeddings as fallback
-            dummy_embeddings = torch.zeros((len(images), 1024, 128), dtype=torch.float32)
-            logger.warning(f"⚠️ Using dummy embeddings ({dummy_embeddings.shape})")
-            return dummy_embeddings
+            logger.error(f"Exception details: {type(e).__name__}: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # CRITICAL: Do not use dummy embeddings - they cause zero similarity scores
+            # Instead, raise the exception to identify and fix the root cause
+            raise RuntimeError(f"ColPali embedding generation failed: {e}. Check logs for details.")
     
     def query_embeddings(self, query: str, document_embeddings: torch.Tensor) -> torch.Tensor:
         """
@@ -397,9 +481,20 @@ class VisualDocumentProcessor:
             
             # Process query text with ColQwen2 API
             with torch.no_grad():
+                query_embedding = None
+                
                 try:
-                    # Use standard text processing for queries
-                    query_inputs = self.processor(text=[query], return_tensors="pt")
+                    # Use ColQwen2 specific query processing API
+                    logger.info("🔧 Processing query with ColQwen2 process_queries API...")
+                    query_inputs = self.processor.process_queries([query])
+                    
+                    # Validate query_inputs
+                    if query_inputs is None:
+                        raise ValueError("Processor returned None for query_inputs")
+                    
+                    # BatchFeature is the correct return type from ColQwen2 processor
+                    if not hasattr(query_inputs, 'keys'):
+                        raise ValueError(f"Expected BatchFeature or dict from processor, got {type(query_inputs)}")
                     
                     # Move to device
                     for key in query_inputs:
@@ -416,12 +511,25 @@ class VisualDocumentProcessor:
                         query_embedding = query_outputs[0]
                     else:
                         query_embedding = query_outputs
+                    
+                    logger.info("✅ Standard query processing succeeded")
                         
                 except Exception as query_err:
                     logger.warning(f"⚠️ Query processing error: {query_err}, using fallback")
                     # Fallback query processing
                     try:
-                        query_inputs = self.processor(query, return_tensors="pt")
+                        logger.info("🔧 Processing query with ColQwen2 process_queries fallback...")
+                        query_inputs = self.processor.process_queries([query])
+                        
+                        # Validate fallback query_inputs
+                        if query_inputs is None:
+                            raise ValueError("Fallback processor also returned None")
+                        
+                        # BatchFeature is the correct return type from ColQwen2 processor
+                        if not hasattr(query_inputs, 'keys'):
+                            raise ValueError(f"Fallback processor returned {type(query_inputs)}, expected BatchFeature or dict")
+                        
+                        # Safely move to device
                         for key in query_inputs:
                             if isinstance(query_inputs[key], torch.Tensor):
                                 query_inputs[key] = query_inputs[key].to(self.device)
@@ -431,9 +539,16 @@ class VisualDocumentProcessor:
                             query_embedding = query_outputs.last_hidden_state
                         else:
                             query_embedding = query_outputs
+                        
+                        logger.info("✅ Fallback query processing succeeded")
+                            
                     except Exception as fallback_err:
                         logger.error(f"❌ Fallback query processing failed: {fallback_err}")
                         raise
+                
+                # Validate query embedding
+                if query_embedding is None:
+                    raise ValueError("All query processing attempts returned None")
                 
                 # Move document embeddings to same device
                 if isinstance(document_embeddings, torch.Tensor):
