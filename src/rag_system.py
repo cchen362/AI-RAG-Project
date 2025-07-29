@@ -24,6 +24,11 @@ import re
 import numpy as np
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+import openai
+from dotenv import load_dotenv
+
+# Load environment variables for API keys
+load_dotenv()
 
 # Fix OpenMP library conflicts
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -80,6 +85,10 @@ class RAGSystem:
         self.config = config
         self.is_initialized = False
         
+        # Initialize OpenAI client for LLM synthesis (similar to ColPali approach)
+        self.openai_client = None
+        self._init_openai_client()
+        
         # Initialize the core RAG components
         logger.info("🔧 Setting up RAG components...")
         try:
@@ -107,6 +116,24 @@ class RAGSystem:
         self.processed_documents = []
         
         logger.info("✅ RAG system created successfully!")
+    
+    def _init_openai_client(self):
+        """Initialize OpenAI client for LLM synthesis."""
+        try:
+            api_key = os.getenv('OPENAI_API_KEY')
+            if api_key:
+                self.openai_client = openai.OpenAI(api_key=api_key)
+                logger.info("✅ OpenAI client initialized for TEXT RAG synthesis")
+                return True
+            else:
+                logger.warning("⚠️ OpenAI API key not found - will use fallback sentence extraction")
+                return False
+        except ImportError:
+            logger.warning("⚠️ OpenAI not available - will use fallback sentence extraction")
+            return False
+        except Exception as e:
+            logger.warning(f"⚠️ OpenAI initialization failed: {e} - will use fallback")
+            return False
     
     def add_documents(self, document_paths: List[str]) -> Dict[str, Any]:
         """
@@ -484,16 +511,13 @@ class RAGSystem:
             return False
 
     def _generate_enhanced_answer(self, question: str, search_results: List[Dict]) -> Dict[str, Any]:
-        """Generate natural language answers from search results."""
+        """Generate enhanced answers using LLM synthesis (similar to ColPali approach)."""
         try:
             if not search_results:
                 return None
                 
             # Extract the most relevant content for answer synthesis
             top_results = search_results[:3]  # Focus on top 3 for quality
-            
-            # Determine query type for appropriate response style
-            query_type = self._classify_query_type(question)
             
             # Extract and clean content
             relevant_content = []
@@ -515,7 +539,20 @@ class RAGSystem:
             if not relevant_content:
                 return None
             
-            # Generate answer based on query type
+            # Try LLM synthesis first (if available)
+            if self.openai_client:
+                logger.info(f"🎯 Using LLM synthesis for TEXT RAG answer generation")
+                answer = self._generate_llm_synthesis_answer(question, relevant_content)
+                if answer:
+                    return {
+                        'answer': answer,
+                        'confidence': max_confidence
+                    }
+            
+            # Fallback to basic sentence extraction if LLM fails
+            logger.info(f"📝 Falling back to sentence extraction for TEXT RAG")
+            query_type = self._classify_query_type(question)
+            
             if query_type == 'factual':
                 answer = self._generate_factual_answer(question, relevant_content)
             elif query_type == 'data_lookup':
@@ -532,6 +569,63 @@ class RAGSystem:
             
         except Exception as e:
             logger.error(f"❌ Enhanced answer generation failed: {str(e)}")
+            return None
+    
+    def _generate_llm_synthesis_answer(self, question: str, relevant_content: List[Dict]) -> str:
+        """Generate answer using LLM synthesis (similar to ColPali's VLM approach)."""
+        try:
+            # Prepare context from search results (same as debug app)
+            context_parts = []
+            for i, item in enumerate(relevant_content[:3], 1):
+                content = item['content']
+                source = item['source']
+                score = item['score']
+                
+                context_parts.append(f"Source {i} (from {source}, relevance: {score:.3f}):\n{content}")
+            
+            combined_context = "\n\n".join(context_parts)
+            
+            # Create query-specific system prompt (proven approach from debug app)
+            system_prompt = f"""You are an expert document analyst helping answer specific questions about the provided content.
+
+CRITICAL INSTRUCTIONS for query: "{question}"
+1. Read all provided text sources carefully
+2. Extract specific facts, details, and information that directly answer the question
+3. Synthesize information from multiple sources when relevant
+4. Focus ONLY on information relevant to this specific query
+5. Provide a clear, direct answer - not a generic summary
+6. If sources contain lists or criteria, extract them specifically
+7. Quote exact information from sources when appropriate
+
+Your response should:
+- Start with the specific information that answers "{question}"
+- Be concise but complete
+- Use natural language, not fragment chunks
+- Cite specific details from the provided sources"""
+
+            # Call OpenAI for synthesis (same as debug app)
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",  # Use efficient model for text synthesis
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user", 
+                        "content": f"Based on the following sources, please answer this question: {question}\n\nSOURCES:\n{combined_context}\n\nPlease provide a clear, specific answer based on the information in these sources."
+                    }
+                ],
+                max_tokens=600,
+                temperature=0.1  # Low temperature for factual, consistent responses
+            )
+            
+            answer = response.choices[0].message.content
+            logger.info(f"✅ LLM synthesis generated {len(answer)} chars for TEXT RAG")
+            return answer
+            
+        except Exception as e:
+            logger.error(f"❌ LLM synthesis failed: {e}")
             return None
     
     def _classify_query_type(self, question: str) -> str:
