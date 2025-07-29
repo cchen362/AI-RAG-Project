@@ -112,7 +112,7 @@ class ColPaliRetriever:
             self.page_embeddings = {}  # {doc_id: {'embeddings': tensor, 'metadata': dict}}
             self.document_metadata = {}  # {doc_id: doc_info}
             self.page_images = {}  # {doc_id: {page_idx: PIL.Image}}
-            self.precomputed_vlm_content = {}  # {doc_id: {page_idx: vlm_analysis}}
+            # Removed precomputed_vlm_content - now using live query-specific analysis
             
             # Initialize VLM for image analysis
             self._init_vlm_client()
@@ -237,10 +237,8 @@ class ColPaliRetriever:
                     # Store page images for VLM analysis (while file still exists)
                     self._store_page_images(doc_id, doc_path)
                     
-                    # CRITICAL: Generate VLM content analysis NOW while file exists
-                    # (not during retrieval when temp files are deleted)
-                    if self.vlm_available and doc_id in self.page_images:
-                        self._precompute_vlm_analysis(doc_id, filename)
+                    # Store page images for live query-specific analysis
+                    # No longer precompute generic analysis - do live analysis per query instead
                     
                     page_count = visual_result['metadata']['page_count']
                     results['successful'].append({
@@ -680,48 +678,9 @@ class ColPaliRetriever:
             self.poppler_available = False
             return False
     
-    def _precompute_vlm_analysis(self, doc_id: str, filename: str):
-        """Precompute VLM analysis for all pages while PDF file still exists."""
-        logger.info(f"🧠 Precomputing VLM analysis for {doc_id}")
-        
-        try:
-            if doc_id not in self.page_images:
-                logger.warning(f"⚠️ No page images found for {doc_id}")
-                return
-            
-            page_images = self.page_images[doc_id]
-            self.precomputed_vlm_content[doc_id] = {}
-            
-            for page_idx, image in page_images.items():
-                try:
-                    # Generate default content for common queries
-                    common_queries = [
-                        "What is this document about?",
-                        "Summarize the main content of this page",
-                        "What are the key topics discussed?"
-                    ]
-                    
-                    # Use the first query as representative analysis
-                    query = common_queries[0]
-                    page_number = page_idx + 1
-                    
-                    # Analyze with VLM
-                    vlm_analysis = self._analyze_image_with_vlm(query, image, filename, page_number)
-                    
-                    if vlm_analysis:
-                        self.precomputed_vlm_content[doc_id][page_idx] = vlm_analysis
-                        logger.info(f"✅ Precomputed VLM for {doc_id} page {page_idx}")
-                    else:
-                        logger.warning(f"⚠️ VLM analysis failed for {doc_id} page {page_idx}")
-                        
-                except Exception as e:
-                    logger.error(f"❌ Error precomputing VLM for {doc_id} page {page_idx}: {e}")
-                    continue
-            
-            logger.info(f"✅ Precomputed VLM analysis for {len(self.precomputed_vlm_content[doc_id])} pages")
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to precompute VLM analysis for {doc_id}: {e}")
+    # Removed _precompute_vlm_analysis - now using live query-specific analysis
+    # This eliminates the generic "What is this document about?" approach that 
+    # caused all queries to receive the same response
     
     def _get_page_image(self, doc_id: str, page_idx: int) -> Image.Image:
         """Get specific page image."""
@@ -800,32 +759,32 @@ class ColPaliRetriever:
         return response
     
     def _generate_vlm_answer(self, query: str, doc_id: str, page_idx: int, doc_info: Dict) -> str:
-        """Generate answer using precomputed VLM analysis or fallback methods."""
+        """Generate query-specific answer using live VLM analysis."""
         
         page_number = page_idx + 1
         filename = doc_info['filename']
         
-        # Step 1: Use precomputed VLM content (generated during document processing)
+        # Step 1: PRIORITY - Live query-specific VLM analysis 
         try:
-            if (doc_id in self.precomputed_vlm_content and 
-                page_idx in self.precomputed_vlm_content[doc_id]):
-                
-                precomputed_content = self.precomputed_vlm_content[doc_id][page_idx]
-                
-                # Create query-focused response with improved content type hints
-                content_type = self._analyze_visual_content_type(precomputed_content, query)
-                adapted_response = self._format_visual_response(precomputed_content, query, filename, page_number, content_type)
-                
-                logger.info(f"✅ Using precomputed VLM content for {doc_id} page {page_idx}")
-                return adapted_response
-                
+            if self.vlm_available:
+                page_image = self._get_page_image(doc_id, page_idx)
+                if page_image:
+                    logger.info(f"🎯 Performing live query-specific VLM analysis for: '{query[:50]}...'")
+                    vlm_response = self._analyze_image_with_vlm(query, page_image, filename, page_number)
+                    if vlm_response and len(vlm_response.strip()) > 50:
+                        logger.info(f"✅ Live VLM analysis successful: {len(vlm_response)} chars")
+                        return vlm_response
+                    else:
+                        logger.warning(f"⚠️ VLM analysis returned minimal content")
+        
         except Exception as e:
-            logger.debug(f"Failed to use precomputed VLM content: {e}")
+            logger.warning(f"❌ Live VLM analysis failed: {e}")
         
         # Step 2: Try to extract text content as backup (if original file still exists)
         try:
             original_path = doc_info.get('original_path', '')
             if original_path and os.path.exists(original_path):
+                logger.info(f"📄 Falling back to text extraction for {filename} page {page_idx}")
                 text_content = self._extract_page_text_simple(original_path, page_idx)
                 
                 if text_content and len(text_content.strip()) > 50:
@@ -841,25 +800,15 @@ class ColPaliRetriever:
         except Exception as e:
             logger.debug(f"Text extraction failed for {filename} page {page_idx}: {e}")
         
-        # Step 3: Try live VLM analysis (if page image still available)
-        try:
-            if self.vlm_available:
-                page_image = self._get_page_image(doc_id, page_idx)
-                if page_image:
-                    vlm_response = self._analyze_image_with_vlm(query, page_image, filename, page_number)
-                    if vlm_response and len(vlm_response.strip()) > 100:
-                        return vlm_response
-        
-        except Exception as e:
-            logger.debug(f"Live VLM analysis failed: {e}")
-        
-        # Step 4: Generate contextual response based on query keywords
+        # Step 3: Generate contextual response based on query keywords
+        logger.info(f"🔧 Generating contextual response for query keywords")
         contextual_response = self._generate_contextual_response(query, filename, page_number)
         if contextual_response:
             return contextual_response
         
-        # Step 5: Final fallback - but make it more informative
-        return f"**Page {page_number} of '{filename}' identified as visually relevant.**\n\nColPali's vision-language model analyzed this page and determined it contains content related to your query: *'{query}'*\n\n📄 **Source**: {filename}, page {page_number}\n⚠️ *Detailed analysis unavailable - temporary file may have been cleaned up*"
+        # Step 4: Final fallback - but make it informative about the query specificity issue
+        logger.warning(f"⚠️ All analysis methods failed for query: '{query}'")
+        return f"**Page {page_number} of '{filename}' identified as visually relevant to your query.**\n\nColPali's similarity scoring determined this page contains content related to: *'{query}'*\n\nHowever, detailed query-specific analysis was not available. This may be due to:\n- VLM analysis temporarily unavailable\n- PDF file no longer accessible for text extraction\n- Network connectivity issues\n\n📄 **Source**: {filename}, page {page_number}\n🔍 **Query**: {query}"
     
     def _analyze_image_with_vlm(self, query: str, image: Image.Image, filename: str, page_number: int) -> str:
         """Send image to VLM for analysis."""
@@ -870,23 +819,22 @@ class ColPaliRetriever:
             image.save(buffered, format="PNG")
             img_base64 = base64.b64encode(buffered.getvalue()).decode()
             
-            # Create more specific and directive prompt for VLM
+            # Create query-specific and directive prompt for VLM (based on successful debug app)
             system_prompt = f"""You are an expert document analyst examining page {page_number} from '{filename}'.
 
-CRITICAL INSTRUCTIONS:
+CRITICAL INSTRUCTIONS for query: "{query}"
 1. Look carefully at the image and read ALL visible text
-2. Extract specific facts, numbers, dates, names, and details that answer the question
-3. If you see tables, transcribe relevant data
-4. If you see charts/graphs, describe the specific data points
+2. Extract specific facts, numbers, dates, and details that answer the exact question
+3. If you see tables or charts, transcribe relevant data points
+4. If you see performance metrics, report the actual numbers
 5. Quote exact text from the document when possible
-6. DO NOT give generic responses - be specific about what you observe
-
-User Question: "{query}"
+6. Focus ONLY on information relevant to this specific query
+7. DO NOT give generic summaries - answer the specific question
 
 Your response should:
-- Start with the specific information that answers the question
+- Start with the specific information that answers "{query}"
 - Include exact quotes, numbers, or data from the page
-- Describe visual elements (charts, tables, diagrams) with specific details
+- Describe visual elements (charts, tables, diagrams) with specific details relevant to the query
 - Be concrete and factual, not vague or general"""
             
             # Call OpenAI Vision API
@@ -901,8 +849,8 @@ Your response should:
                         "role": "user",
                         "content": [
                             {
-                                "type": "text",
-                                "text": f"Examine this document page carefully. Read all text, analyze all visual elements, and provide specific details to answer: {query}\n\nI need concrete facts, not general descriptions. Extract exact information from what you can see."
+                                "type": "text", 
+                                "text": f"Please analyze this document page to answer: {query}\n\nI need specific facts and details from what you can see in the image, not general descriptions."
                             },
                             {
                                 "type": "image_url",
@@ -958,14 +906,14 @@ Your response should:
             self.page_embeddings.clear()
             self.document_metadata.clear()
             self.page_images.clear()  # Clear stored page images
-            self.precomputed_vlm_content.clear()  # Clear precomputed VLM analysis
+            # No longer need to clear precomputed_vlm_content (removed)
             
             # Clear processed documents list and reset initialization
             self.processed_documents.clear()
             self.is_initialized = False
             result = True
             
-            logger.info("✅ ColPaliRetriever cleared all documents, images, and VLM content")
+            logger.info("✅ ColPaliRetriever cleared all documents and images")
             return result
             
         except Exception as e:
