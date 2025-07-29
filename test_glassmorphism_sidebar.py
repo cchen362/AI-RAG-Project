@@ -60,7 +60,7 @@ if 'chat_history' not in st.session_state:
 def load_glassmorphism_css():
     st.markdown("""
     <style>
-    /* Cache buster v2.0 */
+    /* CACHE BUSTER v6.0 - STEP BACK FIX - $(Math.random()) */
     /* Import elegant fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
     
@@ -77,23 +77,45 @@ def load_glassmorphism_css():
         max-width: none !important;
     }
     
-    /* Glass container base class */
+    /* Enhanced Glass container base class - 2025 Design */
     .glass-container {
-        background: rgba(255, 255, 255, 0.1) !important;
-        backdrop-filter: blur(15px) !important;
-        -webkit-backdrop-filter: blur(15px) !important;
-        border-radius: 16px !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+        background: rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border-radius: 18px !important;
+        border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
         padding: 0.75rem !important;
         margin: 0.4rem 0 !important;
-        transition: all 0.3s ease !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        position: relative !important;
+    }
+    
+    .glass-container::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        border-radius: 18px !important;
+        padding: 1px !important;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05)) !important;
+        mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
+        mask-composite: exclude !important;
+        -webkit-mask-composite: xor !important;
+        pointer-events: none !important;
     }
     
     .glass-container:hover {
-        background: rgba(255, 255, 255, 0.15) !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+        background: rgba(255, 255, 255, 0.12) !important;
+        transform: translateY(-2px) scale(1.02) !important;
+        box-shadow: 
+            0 16px 48px rgba(0, 0, 0, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+        border-color: rgba(255, 255, 255, 0.25) !important;
     }
     
     /* Glass header styling */
@@ -194,22 +216,38 @@ def load_glassmorphism_css():
     }
     
     .status-card {
-        background: rgba(255, 255, 255, 0.08) !important;
-        backdrop-filter: blur(10px) !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        background: rgba(255, 255, 255, 0.06) !important;
+        backdrop-filter: blur(16px) saturate(160%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
         padding: 0.75rem !important;
         text-align: center !important;
-        transition: all 0.3s ease !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+    
+    .status-card::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        height: 1px !important;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent) !important;
+        pointer-events: none !important;
     }
     
     .status-card:hover {
-        background: rgba(255, 255, 255, 0.12) !important;
-        transform: scale(1.02) !important;
+        background: rgba(255, 255, 255, 0.1) !important;
+        transform: translateY(-1px) scale(1.02) !important;
+        border-color: rgba(255, 255, 255, 0.2) !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2) !important;
     }
     
     .status-label {
-        font-size: 0.7rem !important;
+        font-size: 0.8rem !important;
         font-weight: 500 !important;
         color: rgba(255, 255, 255, 0.7) !important;
         text-transform: uppercase !important;
@@ -218,7 +256,7 @@ def load_glassmorphism_css():
     }
     
     .status-value {
-        font-size: 1rem !important;
+        font-size: 1.1rem !important;
         font-weight: 600 !important;
         color: #64b5f6 !important;
         margin: 0 !important;
@@ -360,9 +398,10 @@ def load_glassmorphism_css():
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Hide any potential white boxes or default streamlit elements */
+    /* Comprehensive white box removal and background override */
     .element-container {
         margin: 0 !important;
+        background: transparent !important;
     }
     
     /* Ensure no white backgrounds appear */
@@ -373,30 +412,133 @@ def load_glassmorphism_css():
     /* Remove extra spacing and white containers */
     .block-container > div {
         gap: 0.5rem !important;
+        background: transparent !important;
     }
     
-    /* Style the native sidebar toggle when collapsed */
-    [data-testid="collapsedControl"] {
-        background: rgba(100, 181, 246, 0.3) !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(100, 181, 246, 0.5) !important;
-        backdrop-filter: blur(15px) !important;
-        margin: 1rem !important;
-        padding: 0.75rem !important;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
-        transition: all 0.3s ease !important;
+    /* Target all sidebar content containers */
+    [data-testid="stSidebar"] .element-container,
+    [data-testid="stSidebar"] .stMarkdown,
+    [data-testid="stSidebar"] .stButton,
+    [data-testid="stSidebar"] .stSelectbox,
+    [data-testid="stSidebar"] .stTextInput,
+    [data-testid="stSidebar"] .stTextArea,
+    [data-testid="stSidebar"] .stNumberInput,
+    [data-testid="stSidebar"] .stDateInput,
+    [data-testid="stSidebar"] .stTimeInput,
+    [data-testid="stSidebar"] .stFileUploader,
+    [data-testid="stSidebar"] .stColorPicker,
+    [data-testid="stSidebar"] .stSlider,
+    [data-testid="stSidebar"] .stRadio,
+    [data-testid="stSidebar"] .stCheckbox,
+    [data-testid="stSidebar"] .stMultiSelect,
+    [data-testid="stSidebar"] .stSelectSlider,
+    [data-testid="stSidebar"] .stDataFrame,
+    [data-testid="stSidebar"] .stTable,
+    [data-testid="stSidebar"] .stMetric {
+        background: transparent !important;
+        backdrop-filter: none !important;
     }
     
-    [data-testid="collapsedControl"]:hover {
-        background: rgba(100, 181, 246, 0.4) !important;
-        border-color: rgba(100, 181, 246, 0.7) !important;
-        transform: translateX(2px) !important;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+    /* Target sidebar user content specifically */
+    [data-testid="stSidebarUserContent"] {
+        background: transparent !important;
     }
     
-    [data-testid="collapsedControl"] svg {
-        color: #ffffff !important;
-        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) !important;
+    [data-testid="stSidebarUserContent"] > div,
+    [data-testid="stSidebarUserContent"] .element-container,
+    [data-testid="stSidebarUserContent"] .stMarkdown > div,
+    [data-testid="stSidebarUserContent"] .block-container {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    /* Selective white box removal - Target specific containers only */
+    [data-testid="stSidebar"] .element-container:not(.status-card):not(.glass-container):not(.chat-bubble),
+    [data-testid="stSidebar"] .stMarkdown > div:not(.status-card):not(.glass-container):not(.chat-bubble) {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* Target specific Streamlit container classes that create white boxes */
+    [data-testid="stSidebar"] .css-1d391kg,
+    [data-testid="stSidebar"] .css-12w0qpk,
+    [data-testid="stSidebar"] .css-17lntkn {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* Exception: Keep our custom glass containers styled */
+    [data-testid="stSidebar"] .glass-container,
+    [data-testid="stSidebar"] .status-card,
+    [data-testid="stSidebar"] .chat-bubble {
+        background: rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 14px !important;
+    }
+    
+    /* Target specific problematic containers */
+    [data-testid="stSidebar"] .stMetric > div {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* Ensure proper text contrast for accessibility */
+    [data-testid="stSidebar"] .status-label,
+    [data-testid="stSidebar"] .status-value {
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    }
+    
+    /* HIDE sidebar toggle completely for fixed layout */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    button[data-testid="collapsedControl"],
+    button[data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    
+    /* Hide the button container entirely */
+    .css-1y4p8pa,
+    .css-1vencpc {
+        display: none !important;
+    }
+    
+    /* TARGETED WHITE BOX FIXES - Very specific selectors */
+    /* Force all sidebar divs to be transparent */
+    [data-testid="stSidebar"] div:not(.status-card):not(.glass-container):not(.chat-bubble) {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* Target the specific markdown containers */
+    [data-testid="stSidebar"] .stMarkdown {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    [data-testid="stSidebar"] .stMarkdown > div {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* Target element containers specifically */
+    [data-testid="stSidebar"] .element-container {
+        background: transparent !important;
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    /* Target any remaining white backgrounds with high specificity */
+    [data-testid="stSidebar"] div[style*="background-color: rgb(255, 255, 255)"],
+    [data-testid="stSidebar"] div[style*="background-color: white"],
+    [data-testid="stSidebar"] div[style*="background: rgb(255, 255, 255)"],
+    [data-testid="stSidebar"] div[style*="background: white"] {
+        background: transparent !important;
+        background-color: transparent !important;
     }
     
     </style>
@@ -439,37 +581,37 @@ def create_chat_bubble(query, answer, source_type, timestamp, tokens):
     color = source_colors.get(source_type, '#64b5f6')
     icon = source_icons.get(source_type, '📝')
     
-    # Create compact token counter for this specific result
+    # Create readable token counter for this specific result
     token_counter = f"""
-    <div style="background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(10px); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15); padding: 8px 12px; margin: 8px 0 4px 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+    <div style="background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(10px); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15); padding: 10px 14px; margin: 10px 0 6px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
             <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Query</div>
-                <div style="color: #64b5f6; font-weight: 600;">{tokens['query_tokens']}</div>
+                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Query</div>
+                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['query_tokens']}</div>
             </div>
             <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Text RAG</div>
-                <div style="color: #64b5f6; font-weight: 600;">{tokens['text_rag_tokens']}</div>
+                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Text RAG</div>
+                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['text_rag_tokens']}</div>
             </div>
             <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">VLM</div>
-                <div style="color: #64b5f6; font-weight: 600;">{tokens['vlm_analysis_tokens']}</div>
+                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">VLM</div>
+                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['vlm_analysis_tokens']}</div>
             </div>
             <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">SF</div>
-                <div style="color: #64b5f6; font-weight: 600;">{tokens['salesforce_api_tokens']}</div>
+                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">SF</div>
+                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['salesforce_api_tokens']}</div>
             </div>
             <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Re-rank</div>
-                <div style="color: #64b5f6; font-weight: 600;">{tokens['reranker_tokens']}</div>
+                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Re-rank</div>
+                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['reranker_tokens']}</div>
             </div>
             <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Response</div>
-                <div style="color: #64b5f6; font-weight: 600;">{tokens['response_tokens']}</div>
+                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Response</div>
+                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['response_tokens']}</div>
             </div>
             <div style="text-align: center; flex: 1; border-left: 1px solid rgba(255, 255, 255, 0.2); padding-left: 8px;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Total</div>
-                <div style="color: #81c784; font-weight: 600;">{tokens['total_tokens']}</div>
+                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Total</div>
+                <div style="color: #81c784; font-weight: 600; font-size: 14px;">{tokens['total_tokens']}</div>
             </div>
         </div>
     </div>
@@ -480,7 +622,7 @@ def create_chat_bubble(query, answer, source_type, timestamp, tokens):
         <div class="chat-query">🔍 {query}</div>
         <div class="chat-answer">{answer}</div>
         {token_counter}
-        <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+        <div class="chat-meta">
             <span>{icon} {source_type.upper()} | {timestamp.strftime('%H:%M:%S')}</span>
         </div>
     </div>
@@ -505,15 +647,22 @@ def main():
         # Feature Status
         st.markdown('<h4 style="color: #81c784; font-size: 1rem; margin-bottom: 0.75rem;">📋 Feature Status</h4>', unsafe_allow_html=True)
         
-        # Create compact status grid
+        # Create compact status grid - Fixed HTML formatting
+        text_rag_card = create_status_card("Text RAG", "✅ Ready", "#81c784")
+        colpali_card = create_status_card("ColPali", "✅ GPU", "#64b5f6")
+        salesforce_card = create_status_card("Salesforce", "⚠️ Config", "#ffb74d")
+        reranker_card = create_status_card("Re-ranker", "✅ BGE", "#81c784")
+        gpu_card = create_status_card("GPU Mode", "⚡ Fast", "#64b5f6")
+        queries_card = create_status_card("Queries", str(len(st.session_state.chat_history)), "#64b5f6")
+        
         status_html = f"""
         <div class="status-grid">
-            {create_status_card("Text RAG", "✅ Ready", "#81c784")}
-            {create_status_card("ColPali", "✅ GPU", "#64b5f6")}
-            {create_status_card("Salesforce", "⚠️ Config", "#ffb74d")}
-            {create_status_card("Re-ranker", "✅ BGE", "#81c784")}
-            {create_status_card("GPU Mode", "⚡ Fast", "#64b5f6")}
-            {create_status_card("Queries", str(len(st.session_state.chat_history)), "#64b5f6")}
+            {text_rag_card}
+            {colpali_card}
+            {salesforce_card}
+            {reranker_card}
+            {gpu_card}
+            {queries_card}
         </div>
         """
         st.markdown(status_html, unsafe_allow_html=True)
@@ -655,7 +804,7 @@ def main():
     # Footer info
     st.markdown("""
     <div style="text-align: center; margin-top: 2rem; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
-        <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.8rem;">🎨 Glassmorphism UI Prototype | Use native sidebar toggle to collapse/expand</div>
+        <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.8rem;">🎨 Glassmorphism UI v6.0 | Fixed Layout + Improved Fonts + Targeted White Box Removal</div>
     </div>
     """, unsafe_allow_html=True)
 
