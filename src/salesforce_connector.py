@@ -7,6 +7,13 @@ from typing import List, Dict, Optional
 from datetime import datetime
 import time
 
+# Import OpenAI for LLM synthesis
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
 class SalesforceConnector:
     def __init__(self):
         load_dotenv()
@@ -18,6 +25,11 @@ class SalesforceConnector:
 
         self.sf = None
         self.logger = logging.getLogger(__name__)
+        
+        # Initialize OpenAI client for LLM synthesis
+        self.openai_client = None
+        self.llm_available = False
+        self._init_openai_client()
 
     def authenticate(self):
         """
@@ -132,6 +144,127 @@ class SalesforceConnector:
         except Exception as e:
             self.logger.error(f"Connection test failed: {e}")
             return False
+    
+    def _init_openai_client(self):
+        """Initialize OpenAI client for LLM synthesis."""
+        if not OPENAI_AVAILABLE:
+            self.logger.warning("OpenAI not available - install with: pip install openai")
+            return False
+        
+        try:
+            api_key = os.getenv('OPENAI_API_KEY')
+            if api_key:
+                self.openai_client = openai.OpenAI(api_key=api_key)
+                self.llm_available = True
+                self.logger.info("✅ OpenAI client initialized for Salesforce LLM synthesis")
+                return True
+            else:
+                self.logger.warning("⚠️ OpenAI API key not found - Salesforce responses will use basic formatting")
+                return False
+        except Exception as e:
+            self.logger.error(f"Failed to initialize OpenAI client: {e}")
+            return False
+    
+    def _generate_llm_synthesis_answer(self, query: str, article: Dict) -> str:
+        """
+        Generate query-specific answer using LLM synthesis (similar to ColPali's VLM approach).
+        """
+        if not self.llm_available or not self.openai_client:
+            self.logger.warning("LLM synthesis not available, using fallback formatting")
+            return self._fallback_format_content(article)
+        
+        try:
+            title = article.get('title', 'Knowledge Article')
+            clean_content = article.get('clean_content', article.get('content', ''))
+            
+            # Clean HTML if needed
+            import re
+            import html
+            clean_content = re.sub(r'<[^>]+>', ' ', clean_content)
+            clean_content = html.unescape(clean_content)
+            clean_content = re.sub(r'\s+', ' ', clean_content).strip()
+            
+            # Create query-specific system prompt (similar to ColPali approach)
+            system_prompt = f"""You are an expert customer service analyst examining Salesforce knowledge article '{title}'.
+
+CRITICAL INSTRUCTIONS for query: "{query}"
+1. Read the article content carefully and extract specific information that directly answers the question
+2. Focus ONLY on information relevant to this specific query  
+3. Provide a clear, step-by-step answer if the query asks for procedures or steps
+4. Convert administrative/technical language into natural, actionable guidance
+5. DO NOT include generic purposes, overviews, or background unless directly relevant
+6. Prioritize actionable steps and specific procedures over general information
+7. If the query asks for "steps" or "how to", structure your response as a clear process
+
+Your response should:
+- Start with the specific information that answers "{query}"
+- Be concise but complete with all necessary steps
+- Use natural language, not technical jargon or administrative headers
+- Focus on what the user needs to DO, not background information
+- Structure steps clearly if it's a procedural query"""
+
+            # Call OpenAI for synthesis
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",  # Use efficient model for text synthesis
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user", 
+                        "content": f"Based on this Salesforce knowledge article, please answer: {query}\n\nARTICLE CONTENT:\n{clean_content}\n\nPlease provide a clear, specific answer that directly addresses the question."
+                    }
+                ],
+                max_tokens=600,
+                temperature=0.1  # Low temperature for factual, consistent responses
+            )
+            
+            answer = response.choices[0].message.content
+            tokens_used = response.usage.total_tokens if response.usage else 0
+            
+            self.logger.info(f"🎯 LLM synthesis successful: {tokens_used} tokens, {len(answer)} chars")
+            
+            return answer
+            
+        except Exception as e:
+            self.logger.error(f"❌ LLM synthesis failed: {e}")
+            # Graceful fallback to basic formatting
+            return self._fallback_format_content(article)
+    
+    def _fallback_format_content(self, article: Dict) -> str:
+        """Fallback formatting method when LLM synthesis is not available."""
+        title = article.get('title', 'Knowledge Article')
+        content = article.get('clean_content', article.get('content', 'No content available'))
+        
+        import re
+        import html
+        
+        # Clean HTML tags and decode entities
+        clean_content = re.sub(r'<[^>]+>', ' ', content)
+        clean_content = html.unescape(clean_content)
+        clean_content = re.sub(r'\s+', ' ', clean_content).strip()
+        
+        # Basic formatting (simplified version of old _format_salesforce_content)
+        sentences = re.split(r'(?<=[.!?])\s+', clean_content)
+        formatted_lines = []
+        
+        for sentence in sentences[:10]:  # Limit to first 10 sentences for conciseness
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            
+            # Detect numbered lists
+            if re.match(r'^\d+\.', sentence):
+                formatted_lines.append(f"**{sentence}**")
+            # Detect action words
+            elif re.match(r'^(Contact|Call|Email|Visit|Check|Verify|Confirm|Review|Submit|Complete)', sentence, re.IGNORECASE):
+                formatted_lines.append(f"**Action:** {sentence}")
+            else:
+                formatted_lines.append(sentence)
+        
+        formatted_content = '\n'.join(formatted_lines)
+        return f"**Based on '{title}':**\n\n{formatted_content}"
         
     def get_knowledge_articles(self, limit=100):
         """
@@ -1078,6 +1211,47 @@ class SalesforceConnector:
                 return False
         
         return True
+    
+    def generate_enhanced_sf_response(self, query: str, sf_results: List[Dict]) -> str:
+        """
+        Generate enhanced Salesforce response using LLM synthesis.
+        This is the main method that should be called for Salesforce responses.
+        """
+        if not sf_results:
+            return "No Salesforce content available"
+        
+        # Use the best result (highest relevance score)
+        best_result = sf_results[0]
+        
+        # Step 1: PRIORITY - Live query-specific LLM synthesis
+        try:
+            if self.llm_available and self.openai_client:
+                self.logger.info(f"🎯 Performing live query-specific LLM synthesis for: '{query[:50]}...'")
+                
+                # Prepare article data for LLM synthesis
+                article_data = {
+                    'title': best_result.get('title', 'Knowledge Article'),
+                    'content': best_result.get('content', ''),
+                    'clean_content': best_result.get('clean_content', '')
+                }
+                
+                # Generate LLM synthesis answer
+                llm_response = self._generate_llm_synthesis_answer(query, article_data)
+                
+                if llm_response and not llm_response.startswith("LLM synthesis failed"):
+                    self.logger.info(f"✅ LLM synthesis successful, returning enhanced response")
+                    return llm_response
+                else:
+                    self.logger.warning("⚠️ LLM synthesis returned empty/failed, using fallback")
+            else:
+                self.logger.info("ℹ️ LLM synthesis not available, using fallback formatting")
+                
+        except Exception as e:
+            self.logger.error(f"❌ LLM synthesis failed: {e}")
+        
+        # Step 2: Fallback to basic formatting
+        self.logger.info("📝 Using fallback formatting for Salesforce response")
+        return self._fallback_format_content(best_result)
         
     # 🧪 TESTING AND DEMONSTRATION METHODS
     

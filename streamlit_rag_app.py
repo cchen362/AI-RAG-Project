@@ -681,9 +681,12 @@ class SimpleRAGOrchestrator:
                 if sf_results:
                     best_sf = max(sf_results, key=lambda x: x.get('relevance_score', 0))
                     
+                    # Use enhanced Salesforce response generation with LLM synthesis
+                    enhanced_answer = self.sf_connector.generate_enhanced_sf_response(user_query, [best_sf])
+                    
                     candidates.append({
                         'success': True,
-                        'answer': self._extract_sf_content(user_query, [best_sf]),
+                        'answer': enhanced_answer,
                         'source_type': 'salesforce',
                         'score': best_sf.get('relevance_score', 0.5),
                         'sources': [{'title': best_sf.get('title', 'Unknown KB'),
@@ -770,82 +773,6 @@ class SimpleRAGOrchestrator:
             'reasoning': f"Fallback selection: {best_candidate['source_type']} had highest score: {best_candidate['score']:.3f}"
         }
     
-    def _extract_sf_content(self, user_query: str, sf_results: List[Dict]) -> str:
-        """Extract relevant content from Salesforce results with improved formatting"""
-        if not sf_results:
-            return "No Salesforce content available"
-        
-        best_result = sf_results[0]
-        title = best_result.get('title', 'Knowledge Article')
-        content = best_result.get('content', 'No content available')
-        
-        import re
-        # Clean HTML tags
-        clean_content = re.sub(r'<[^>]+>', ' ', content)
-        clean_content = re.sub(r'\s+', ' ', clean_content).strip()
-        
-        # Improve formatting for better readability
-        formatted_content = self._format_salesforce_content(clean_content)
-        
-        return f"**Based on '{title}':**\n\n{formatted_content}"
-    
-    def _format_salesforce_content(self, content: str) -> str:
-        """Format Salesforce content with proper structure and readability"""
-        import re
-        
-        # Split into sentences for better processing
-        sentences = re.split(r'(?<=[.!?])\s+', content)
-        
-        formatted_lines = []
-        current_section = []
-        
-        for sentence in sentences:
-            sentence = sentence.strip()
-            if not sentence:
-                continue
-            
-            # Detect numbered lists (1., 2., etc.)
-            if re.match(r'^\d+\.', sentence):
-                # If we have accumulated content, add it first
-                if current_section:
-                    formatted_lines.append(' '.join(current_section))
-                    current_section = []
-                formatted_lines.append(f"\n**{sentence}**")
-            
-            # Detect lettered lists (a., b., etc.)
-            elif re.match(r'^[a-zA-Z]\.', sentence):
-                if current_section:
-                    formatted_lines.append(' '.join(current_section))
-                    current_section = []
-                formatted_lines.append(f"\n• {sentence}")
-            
-            # Detect action words that suggest new sections
-            elif re.match(r'^(Contact|Call|Email|Visit|Check|Verify|Confirm|Review|Submit|Complete)', sentence, re.IGNORECASE):
-                if current_section:
-                    formatted_lines.append(' '.join(current_section))
-                    current_section = []
-                formatted_lines.append(f"\n**Action:** {sentence}")
-            
-            # Detect important keywords that should be emphasized
-            elif re.search(r'\b(important|note|warning|attention|remember|caution)\b', sentence, re.IGNORECASE):
-                if current_section:
-                    formatted_lines.append(' '.join(current_section))
-                    current_section = []
-                formatted_lines.append(f"\n⚠️ **Important:** {sentence}")
-            
-            # Regular sentence - accumulate
-            else:
-                current_section.append(sentence)
-        
-        # Add any remaining content
-        if current_section:
-            formatted_lines.append(' '.join(current_section))
-        
-        # Join and clean up extra whitespace
-        result = '\n'.join(formatted_lines)
-        result = re.sub(r'\n\s*\n\s*\n+', '\n\n', result)  # Normalize multiple line breaks
-        
-        return result.strip()
     
     def add_documents(self, file_paths: List[str]) -> Dict[str, Any]:
         """Add documents to ALL available systems (text + ColPali)"""
