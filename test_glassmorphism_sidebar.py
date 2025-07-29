@@ -60,7 +60,7 @@ if 'chat_history' not in st.session_state:
 def load_glassmorphism_css():
     st.markdown("""
     <style>
-    /* CACHE BUSTER v6.0 - STEP BACK FIX - $(Math.random()) */
+    /* CACHE BUSTER v8.0 - NUCLEAR APPROACH - FORCE EVERYTHING */
     /* Import elegant fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
     
@@ -541,6 +541,128 @@ def load_glassmorphism_css():
         background-color: transparent !important;
     }
     
+    /* SPECIFIC FIXES for status grid and chat bubble containers */
+    /* Target the parent containers of status-grid and chat bubbles */
+    [data-testid="stSidebar"] .stMarkdown:has(.status-grid),
+    [data-testid="stSidebar"] .stMarkdown:has(.status-grid) > div,
+    [data-testid="stSidebar"] .element-container:has(.status-grid),
+    [data-testid="stSidebar"] .element-container:has(.status-grid) > div {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* Target containers around chat bubbles specifically */
+    [data-testid="stSidebar"] .stMarkdown:has(.chat-bubble),
+    [data-testid="stSidebar"] .stMarkdown:has(.chat-bubble) > div,
+    [data-testid="stSidebar"] .element-container:has(.chat-bubble),
+    [data-testid="stSidebar"] .element-container:has(.chat-bubble) > div {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* Fallback: Target all nested divs in sidebar more aggressively */
+    [data-testid="stSidebar"] > div > div,
+    [data-testid="stSidebar"] > div > div > div,
+    [data-testid="stSidebar"] > div > div > div > div {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* TOKEN COUNTER specific styling to replace inline styles */
+    .token-counter {
+        background: rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        padding: 10px 14px !important;
+        margin: 10px 0 6px 0 !important;
+    }
+    
+    .token-counter-grid {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        font-size: 12px !important;
+    }
+    
+    .token-counter-item {
+        text-align: center !important;
+        flex: 1 !important;
+    }
+    
+    .token-counter-item.total {
+        border-left: 1px solid rgba(255, 255, 255, 0.2) !important;
+        padding-left: 8px !important;
+    }
+    
+    .token-counter-label {
+        color: rgba(255, 255, 255, 0.6) !important;
+        font-size: 10px !important;
+        text-transform: uppercase !important;
+        margin-bottom: 2px !important;
+    }
+    
+    .token-counter-value {
+        color: #64b5f6 !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+    }
+    
+    .token-counter-value.total {
+        color: #81c784 !important;
+        font-size: 14px !important;
+    }
+    
+    /* NUCLEAR APPROACH - FORCE EVERY POSSIBLE ELEMENT TO BE TRANSPARENT */
+    /* Maximum specificity override for EVERYTHING in sidebar */
+    html body div[data-testid="stSidebar"] * {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    html body div[data-testid="stSidebar"] div {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    html body div[data-testid="stSidebar"] .stMarkdown {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    html body div[data-testid="stSidebar"] .stMarkdown div {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    html body div[data-testid="stSidebar"] .element-container {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    /* FORCE specific white box areas */
+    html body div[data-testid="stSidebar"] [style*="background"] {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* Exception: Keep only our glass elements */
+    html body div[data-testid="stSidebar"] .status-card {
+        background: rgba(255, 255, 255, 0.06) !important;
+        backdrop-filter: blur(16px) saturate(160%) !important;
+    }
+    
+    html body div[data-testid="stSidebar"] .token-counter {
+        background: rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    html body div[data-testid="stSidebar"] .chat-bubble {
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(12px) !important;
+    }
+    
     </style>
     """, unsafe_allow_html=True)
 
@@ -581,37 +703,37 @@ def create_chat_bubble(query, answer, source_type, timestamp, tokens):
     color = source_colors.get(source_type, '#64b5f6')
     icon = source_icons.get(source_type, '📝')
     
-    # Create readable token counter for this specific result
+    # Create readable token counter using CSS classes instead of inline styles
     token_counter = f"""
-    <div style="background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(10px); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15); padding: 10px 14px; margin: 10px 0 6px 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
-            <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Query</div>
-                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['query_tokens']}</div>
+    <div class="token-counter">
+        <div class="token-counter-grid">
+            <div class="token-counter-item">
+                <div class="token-counter-label">Query</div>
+                <div class="token-counter-value">{tokens['query_tokens']}</div>
             </div>
-            <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Text RAG</div>
-                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['text_rag_tokens']}</div>
+            <div class="token-counter-item">
+                <div class="token-counter-label">Text RAG</div>
+                <div class="token-counter-value">{tokens['text_rag_tokens']}</div>
             </div>
-            <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">VLM</div>
-                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['vlm_analysis_tokens']}</div>
+            <div class="token-counter-item">
+                <div class="token-counter-label">VLM</div>
+                <div class="token-counter-value">{tokens['vlm_analysis_tokens']}</div>
             </div>
-            <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">SF</div>
-                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['salesforce_api_tokens']}</div>
+            <div class="token-counter-item">
+                <div class="token-counter-label">SF</div>
+                <div class="token-counter-value">{tokens['salesforce_api_tokens']}</div>
             </div>
-            <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Re-rank</div>
-                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['reranker_tokens']}</div>
+            <div class="token-counter-item">
+                <div class="token-counter-label">Re-rank</div>
+                <div class="token-counter-value">{tokens['reranker_tokens']}</div>
             </div>
-            <div style="text-align: center; flex: 1;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Response</div>
-                <div style="color: #64b5f6; font-weight: 600; font-size: 13px;">{tokens['response_tokens']}</div>
+            <div class="token-counter-item">
+                <div class="token-counter-label">Response</div>
+                <div class="token-counter-value">{tokens['response_tokens']}</div>
             </div>
-            <div style="text-align: center; flex: 1; border-left: 1px solid rgba(255, 255, 255, 0.2); padding-left: 8px;">
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">Total</div>
-                <div style="color: #81c784; font-weight: 600; font-size: 14px;">{tokens['total_tokens']}</div>
+            <div class="token-counter-item total">
+                <div class="token-counter-label">Total</div>
+                <div class="token-counter-value total">{tokens['total_tokens']}</div>
             </div>
         </div>
     </div>
@@ -666,6 +788,23 @@ def main():
         </div>
         """
         st.markdown(status_html, unsafe_allow_html=True)
+        
+        # NUCLEAR CSS INJECTION - Force override after everything loads
+        st.markdown("""
+        <style>
+        /* FORCE WHITE BOX REMOVAL WITH MAXIMUM PRIORITY */
+        div[data-testid="stSidebar"] * {
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+        div[data-testid="stSidebar"] .status-card {
+            background: rgba(255, 255, 255, 0.06) !important;
+        }
+        div[data-testid="stSidebar"] .token-counter {
+            background: rgba(255, 255, 255, 0.08) !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         
         # System Status Section
         st.markdown('<h4 style="color: #ffb74d; font-size: 1rem; margin-bottom: 0.75rem;">📊 System Status</h4>', unsafe_allow_html=True)
@@ -766,6 +905,20 @@ def main():
                     chat['token_breakdown']
                 )
                 st.markdown(bubble_html, unsafe_allow_html=True)
+                
+                # NUCLEAR CSS INJECTION for chat bubbles
+                st.markdown("""
+                <style>
+                /* FORCE CHAT BUBBLE WHITE BOX REMOVAL */
+                .stMarkdown div {
+                    background: transparent !important;
+                    background-color: transparent !important;
+                }
+                .chat-bubble .token-counter {
+                    background: rgba(255, 255, 255, 0.08) !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
     
     with col2:
         # Document Management Section
@@ -804,7 +957,7 @@ def main():
     # Footer info
     st.markdown("""
     <div style="text-align: center; margin-top: 2rem; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
-        <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.8rem;">🎨 Glassmorphism UI v6.0 | Fixed Layout + Improved Fonts + Targeted White Box Removal</div>
+        <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.8rem;">🎨 Glassmorphism v8.0 | NUCLEAR CSS APPROACH - Force Override Everything</div>
     </div>
     """, unsafe_allow_html=True)
 
