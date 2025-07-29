@@ -10,7 +10,9 @@
       "mcp__ide__getDiagnostics",
       "Bash(rag_env\\Scripts\\activate)",
       "Bash(grep:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": []
   }

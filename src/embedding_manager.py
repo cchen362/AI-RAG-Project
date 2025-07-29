@@ -318,7 +318,18 @@ class EmbeddingManager:
                     'error': 'VisualDocumentProcessor not initialized'
                 }
             
+            self.logger.info(f"🔍 DEBUG: Calling visual_processor.process_file for {os.path.basename(file_path)}")
             result = self.visual_processor.process_file(file_path)
+            
+            # DEBUG: Log result details
+            self.logger.info(f"🔍 DEBUG: Visual processor returned status: {result.get('status')}")
+            if result.get('status') == 'success' and 'embeddings' in result:
+                if hasattr(result['embeddings'], 'shape'):
+                    self.logger.info(f"🔍 DEBUG: Embeddings shape from visual processor: {result['embeddings'].shape}")
+                else:
+                    self.logger.info(f"🔍 DEBUG: Embeddings type from visual processor: {type(result['embeddings'])}")
+            else:
+                self.logger.info(f"🔍 DEBUG: No embeddings in result or failed status")
             
             if result['status'] == 'error':
                 self.logger.error(f"Visual processor error: {result['error']}")

@@ -393,10 +393,230 @@ class SimpleRAGOrchestrator:
         
         return capabilities
     
+    def reinitialize_with_fresh_embeddings(self) -> bool:
+        """
+        Reinitialize all embedding systems with fresh state.
+        Call this after clearing cache or changing embedding models.
+        """
+        logger.info("🔄 Reinitializing all embedding systems with fresh state...")
+        
+        try:
+            # Clear any existing vector databases
+            if hasattr(self, 'text_rag') and self.text_rag:
+                if hasattr(self.text_rag, 'vector_db'):
+                    logger.info("🧹 Clearing text RAG vector database...")
+                    self.text_rag.vector_db = None
+            
+            if hasattr(self, 'colpali_retriever') and self.colpali_retriever:
+                logger.info("🧹 Clearing ColPali embeddings...")
+                if hasattr(self.colpali_retriever, 'document_embeddings'):
+                    self.colpali_retriever.document_embeddings = {}
+                if hasattr(self.colpali_retriever, 'document_metadata'):
+                    self.colpali_retriever.document_metadata = {}
+            
+            # Reinitialize components
+            logger.info("🔧 Reinitializing components...")
+            self.initialize_components()
+            
+            logger.info("✅ Reinitialization complete - ready for fresh document processing")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Reinitialization failed: {e}")
+            return False
+    
+    def _enhance_query_for_search(self, query: str) -> str:
+        """
+        Enhance query for better vector search across all sources.
+        Adds relevant synonyms and context to improve embedding matching.
+        """
+        query_lower = query.lower()
+        enhanced_terms = []
+        
+        # Person/role queries - expand with synonyms
+        if any(term in query_lower for term in ['who is', 'who are', 'person', 'people']):
+            if 'recruitment' in query_lower:
+                enhanced_terms.extend(['recruitment specialist', 'hiring manager', 'HR recruiter', 'human resources'])
+            elif 'senior dev' in query_lower or 'senior developer' in query_lower:
+                enhanced_terms.extend(['senior developer', 'lead developer', 'principal engineer', 'senior engineer'])
+            elif 'manager' in query_lower:
+                enhanced_terms.extend(['manager', 'supervisor', 'team lead', 'director'])
+        
+        # Performance/chart queries - add technical terms
+        if any(term in query_lower for term in ['time', 'performance', 'speed', 'latency']):
+            if 'retrieval' in query_lower:
+                enhanced_terms.extend(['retrieval time', 'query performance', 'search latency', 'response time'])
+            elif 'colpali' in query_lower:
+                enhanced_terms.extend(['colpali', 'visual embedding', 'document processing', 'pipeline performance'])
+        
+        # Chart/visual queries - add visual terms
+        if any(term in query_lower for term in ['chart', 'graph', 'diagram', 'figure']):
+            enhanced_terms.extend(['visualization', 'chart data', 'graph analysis', 'performance metrics'])
+        
+        # Build enhanced query
+        if enhanced_terms:
+            # Remove duplicates and join with original query
+            unique_terms = list(set(enhanced_terms))
+            enhanced_query = f"{query} {' '.join(unique_terms)}"
+            return enhanced_query
+        
+        return query
+    
+    def _clean_response_for_user(self, response: str, source_type: str) -> str:
+        """
+        Clean and format responses from all sources for better user experience.
+        Removes technical metadata and converts raw data to natural language.
+        """
+        if not response or not response.strip():
+            return response
+        
+        import re
+        
+        # Remove CSV/Excel technical headers
+        cleaned = re.sub(r'### CSV: [^-]+ - Entry \d+\n\n', '', response)
+        cleaned = re.sub(r'### Sheet: [^-]+ - Entry \d+\n\n', '', cleaned)
+        
+        # Remove "Key fields:" technical metadata
+        cleaned = re.sub(r'\n\nKey fields: [^\n]+', '', cleaned)
+        
+        # Remove page markers from PDFs (but keep the content)
+        cleaned = re.sub(r'--- Page \d+ ---\n?', '', cleaned)
+        
+        # Clean ColPali prefixes but keep content type context
+        if source_type == 'colpali':
+            # Keep helpful prefixes like "Performance chart analysis:" but remove technical stuff
+            cleaned = re.sub(r'\(from [^)]+\)', '', cleaned)
+        
+        # Remove extra whitespace and normalize
+        cleaned = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned)
+        cleaned = cleaned.strip()
+        
+        # ENHANCED: Convert raw structured data patterns to natural language
+        cleaned = self._convert_raw_data_to_natural_language(cleaned, source_type)
+        
+        # For person queries, make response more conversational
+        if any(indicator in response.lower() for indicator in ['works as', 'specialist', 'manager', 'developer']):
+            # This is a person query - make it more natural
+            if not cleaned.startswith('The person') and not cleaned.startswith('Based on'):
+                # Add context if it's just a name and role
+                if len(cleaned.split('.')) == 1 and ' works as ' in cleaned:
+                    cleaned = f"Based on the data, {cleaned.lower()}"
+        
+        return cleaned
+    
+    def _convert_raw_data_to_natural_language(self, content: str, source_type: str) -> str:
+        """Convert raw structured data patterns into natural language answers."""
+        import re
+        
+        # Pattern 1: Technical specification format (like the user's example)
+        # "Policy Validation Engine: Given that a traveler is making a booking When they select travel options..."
+        technical_spec_pattern = r'([A-Z][^:]+):\s*Given that\s+([^.]+)\s+When\s+([^.]+)\s+Then\s+([^.]+)'
+        match = re.search(technical_spec_pattern, content)
+        if match:
+            system_name, given_condition, when_condition, then_result = match.groups()
+            natural_response = f"The {system_name.lower()} is designed to handle the following scenario: when {given_condition.lower()}, and specifically when {when_condition.lower()}, the system will {then_result.lower()}."
+            
+            # If there's more content after the technical spec, include it
+            remaining_content = content[match.end():].strip()
+            if remaining_content:
+                # Clean up remaining content and add it
+                remaining_content = re.sub(r'Given that.*?Then\s+[^.]+\.?\s*', '', remaining_content)
+                remaining_content = remaining_content.strip()
+                if remaining_content:
+                    natural_response += f" Additionally, {remaining_content}"
+            
+            return natural_response
+        
+        # Pattern 2: Raw CSV/table data format
+        # "Row 1: Name: John Smith | Department: Engineering | Role: Manager"
+        row_data_pattern = r'Row \d+:\s*(.+?)(?=Row \d+:|$)'
+        if 'Row ' in content and '|' in content:
+            # Extract meaningful information from table rows
+            rows = re.findall(row_data_pattern, content, re.DOTALL)
+            if rows:
+                summary_parts = []
+                for row in rows[:3]:  # Limit to first 3 rows for brevity
+                    # Parse key-value pairs
+                    pairs = [pair.strip() for pair in row.split('|') if ':' in pair]
+                    if pairs:
+                        row_info = {}
+                        for pair in pairs:
+                            if ':' in pair:
+                                key, value = pair.split(':', 1)
+                                row_info[key.strip().lower()] = value.strip()
+                        
+                        # Create natural sentence from the data
+                        if 'name' in row_info:
+                            sentence = f"{row_info['name']}"
+                            if 'role' in row_info or 'position' in row_info:
+                                role = row_info.get('role', row_info.get('position', ''))
+                                sentence += f" works as {role}"
+                            if 'department' in row_info:
+                                sentence += f" in the {row_info['department']} department"
+                            summary_parts.append(sentence)
+                
+                if summary_parts:
+                    return f"Based on the data, here's what I found: {'. '.join(summary_parts)}."
+        
+        # Pattern 3: Business rule format
+        # "Rule: [condition] Result: [outcome]"
+        rule_pattern = r'Rule:\s*([^.]+)\s+Result:\s*([^.]+)'
+        match = re.search(rule_pattern, content)
+        if match:
+            condition, outcome = match.groups()
+            return f"According to the business rules, {condition.lower().strip()}, and as a result, {outcome.lower().strip()}."
+        
+        # Pattern 4: Process step format
+        if 'Step 1:' in content or 'Phase 1:' in content:
+            # Convert step-by-step format to flowing description
+            steps = re.findall(r'(?:Step|Phase)\s+\d+:\s*([^.]+)', content)
+            if steps:
+                if len(steps) == 1:
+                    return f"The process involves {steps[0].lower()}."
+                else:
+                    return f"The process consists of several steps: {', '.join(step.lower() for step in steps[:-1])}, and finally {steps[-1].lower()}."
+        
+        # Pattern 5: Acceptance criteria format (like the user's example)
+        if 'acceptance criteria' in content.lower():
+            # Clean up technical jargon and make it more readable
+            cleaned = re.sub(r'Given that\s+', 'When ', content)
+            cleaned = re.sub(r'When they\s+', 'and when they ', cleaned)
+            cleaned = re.sub(r'Then the\s+', 'the ', cleaned)
+            
+            # If it's still very technical, add a natural introduction
+            if not cleaned.lower().startswith(('the', 'this', 'according', 'based on')):
+                cleaned = f"The acceptance criteria specify that {cleaned.lower()}"
+            
+            return cleaned
+        
+        # Pattern 6: Configuration or policy data
+        config_patterns = ['Policy:', 'Configuration:', 'Setting:', 'Rule:']
+        for pattern in config_patterns:
+            if pattern in content:
+                parts = content.split(pattern)
+                if len(parts) > 1:
+                    policy_content = parts[1].strip()
+                    return f"According to the {pattern.lower().rstrip(':')}, {policy_content}"
+        
+        # If no specific patterns match, try to make the content more natural
+        # Remove technical markers and improve flow
+        if content.count(':') > 2 and content.count('|') > 1:
+            # This looks like structured data - try to make it more readable
+            content = re.sub(r'\s*\|\s*', ', ', content)  # Replace | with commas
+            content = re.sub(r'([A-Z][^:]+):\s*', r'\1 is ', content)  # Convert "Field:" to "Field is"
+        
+        return content
+    
     def query_all_sources(self, user_query: str) -> Dict[str, Any]:
         """Query ALL sources and use re-ranker to select best response"""
         
+        # Enhance query for better vector search across all sources
+        enhanced_query = self._enhance_query_for_search(user_query)
+        
         logger.info(f"🔍 Querying ALL sources for: '{user_query[:50]}...'")
+        if enhanced_query != user_query:
+            logger.debug(f"📝 Enhanced query: '{enhanced_query[:50]}...'")
+        
         candidates = []
         
         # 1. Query Text RAG system (if available)
@@ -404,7 +624,7 @@ class SimpleRAGOrchestrator:
             text_start_time = time.time()
             try:
                 logger.info("📝 Querying text RAG system...")
-                text_results = self.text_rag.query(user_query)
+                text_results = self.text_rag.query(enhanced_query)
                 
                 if text_results.get('success'):
                     candidates.append({
@@ -428,7 +648,7 @@ class SimpleRAGOrchestrator:
             colpali_start_time = time.time()
             try:
                 logger.info("🖼️ Querying ColPali retriever...")
-                colpali_results, metrics = self.colpali_retriever.retrieve(user_query, top_k=5)
+                colpali_results, metrics = self.colpali_retriever.retrieve(enhanced_query, top_k=5)
                 
                 if colpali_results:
                     best_result = colpali_results[0]
@@ -444,6 +664,7 @@ class SimpleRAGOrchestrator:
                         'token_info': {'query_time': metrics.query_time, 'vlm_tokens': 245}
                     })
                     logger.info(f"✅ ColPali returned {len(colpali_results)} results (best score: {best_result.score:.3f})")
+                    logger.info(f"🎯 ColPali content preview: {best_result.content[:100]}...")
                 else:
                     logger.info("ℹ️ ColPali found no relevant visual content")
                     
@@ -455,7 +676,7 @@ class SimpleRAGOrchestrator:
             sf_start_time = time.time()
             try:
                 logger.info("🏢 Querying Salesforce knowledge base...")
-                sf_results = self.sf_connector.search_knowledge_with_intent(user_query, limit=3)
+                sf_results = self.sf_connector.search_knowledge_with_intent(enhanced_query, limit=3)
                 
                 if sf_results:
                     best_sf = max(sf_results, key=lambda x: x.get('relevance_score', 0))
@@ -501,9 +722,12 @@ class SimpleRAGOrchestrator:
                     reranker_tokens=10
                 )
                 
+                # Clean response for better user experience
+                cleaned_answer = self._clean_response_for_user(selected['answer'], selected['source_type'])
+                
                 return {
                     'success': True,
-                    'answer': selected['answer'],
+                    'answer': cleaned_answer,
                     'selected_source': selected['source_type'],
                     'rerank_score': selected['rerank_score'],
                     'sources': selected['sources'],
@@ -525,16 +749,19 @@ class SimpleRAGOrchestrator:
         logger.warning("⚠️ Using fallback scoring (re-ranker not available)")
         best_candidate = max(candidates, key=lambda x: x['score'])
         
+        # Clean response for better user experience
+        cleaned_answer = self._clean_response_for_user(best_candidate['answer'], best_candidate['source_type'])
+        
         token_breakdown = self.token_counter.get_comprehensive_breakdown(
             query=user_query,
-            answer=best_candidate['answer'],
+            answer=cleaned_answer,
             vlm_tokens=best_candidate.get('token_info', {}).get('vlm_tokens', 0),
             sf_tokens=best_candidate.get('token_info', {}).get('sf_tokens', 0)
         )
         
         return {
             'success': True,
-            'answer': best_candidate['answer'],
+            'answer': cleaned_answer,
             'selected_source': best_candidate['source_type'],
             'rerank_score': best_candidate['score'],
             'sources': best_candidate['sources'],

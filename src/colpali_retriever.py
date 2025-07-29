@@ -203,7 +203,17 @@ class ColPaliRetriever:
                     continue
                 
                 # Generate visual embeddings and extract page images
+                logger.info(f"🔄 Calling embedding_manager.create_visual_embedding for {filename}")
                 visual_result = self.embedding_manager.create_visual_embedding(doc_path)
+                
+                logger.info(f"📊 Visual embedding result: status={visual_result.get('status')}, keys={list(visual_result.keys())}")
+                if 'embeddings' in visual_result and visual_result['embeddings'] is not None:
+                    if hasattr(visual_result['embeddings'], 'shape'):
+                        logger.info(f"📊 Embeddings shape: {visual_result['embeddings'].shape}")
+                    else:
+                        logger.info(f"📊 Embeddings type: {type(visual_result['embeddings'])}")
+                else:
+                    logger.warning(f"⚠️ No embeddings in visual_result: {visual_result}")
                 
                 if visual_result['status'] == 'success':
                     # Create unique document ID
@@ -214,6 +224,8 @@ class ColPaliRetriever:
                         'embeddings': visual_result['embeddings'],
                         'metadata': visual_result['metadata']
                     }
+                    logger.info(f"📦 Stored embeddings for doc_id: {doc_id}")
+                    logger.info(f"📦 Total docs in page_embeddings: {len(self.page_embeddings)}")
                     
                     self.document_metadata[doc_id] = {
                         'filename': filename,
@@ -268,8 +280,16 @@ class ColPaliRetriever:
         processing_time = time.time() - start_time
         results['processing_time'] = processing_time
         
-        # Update initialization status
-        self.is_initialized = len(results['successful']) > 0
+        # DEBUG: Log results tracking vs actual stored data
+        logger.info(f"🔍 DEBUG: results['successful'] count: {len(results['successful'])}")
+        logger.info(f"🔍 DEBUG: page_embeddings count: {len(self.page_embeddings)}")
+        logger.info(f"🔍 DEBUG: processed_documents count: {len(self.processed_documents)}")
+        
+        # FIXED: Use actual stored data for initialization status instead of results tracking
+        # The results['successful'] tracking was somehow failing despite successful processing
+        self.is_initialized = len(self.page_embeddings) > 0
+        
+        logger.info(f"🔧 FIXED: is_initialized set to {self.is_initialized} based on stored embeddings")
         
         # Update stats
         self.retrieval_stats['total_documents_processed'] += len(results['successful'])
@@ -285,6 +305,8 @@ class ColPaliRetriever:
         """
         if not self.is_initialized:
             logger.warning("⚠️ No documents processed yet")
+            logger.warning(f"🔍 Debug: is_initialized={self.is_initialized}, page_embeddings count={len(self.page_embeddings)}")
+            logger.warning(f"🔍 Debug: processed_documents count={len(self.processed_documents)}")
             return [], RetrievalMetrics(0, 0, 0, 0, 0, 0)
         
         # Check if poppler was available during document processing
@@ -713,6 +735,70 @@ class ColPaliRetriever:
             logger.error(f"Error getting page image: {e}")
             return None
     
+    def _analyze_visual_content_type(self, content: str, query: str) -> str:
+        """Analyze the type of visual content to provide better context hints."""
+        content_lower = content.lower()
+        query_lower = query.lower()
+        
+        # Detect visual content patterns
+        if any(term in content_lower for term in ['chart', 'graph', 'plot', 'figure', 'diagram']):
+            if any(term in content_lower for term in ['time', 'performance', 'speed', 'latency']):
+                return 'performance_chart'
+            elif any(term in content_lower for term in ['comparison', 'vs', 'versus', 'compared']):
+                return 'comparison_chart'
+            else:
+                return 'data_chart'
+        elif any(term in content_lower for term in ['table', 'data', 'columns', 'rows']):
+            return 'data_table'
+        elif any(term in content_lower for term in ['pipeline', 'workflow', 'architecture', 'diagram']):
+            return 'technical_diagram'
+        else:
+            return 'document_page'
+    
+    def _format_visual_response(self, content: str, query: str, filename: str, page_number: int, content_type: str) -> str:
+        """Format visual content response for better re-ranker compatibility."""
+        
+        # Create content type hints for the re-ranker
+        type_prefixes = {
+            'performance_chart': 'Performance chart analysis: ',
+            'comparison_chart': 'Comparison chart data: ',
+            'data_chart': 'Chart visualization shows: ',
+            'data_table': 'Table data indicates: ',
+            'technical_diagram': 'Technical diagram depicts: ',
+            'document_page': 'Document content: '
+        }
+        
+        prefix = type_prefixes.get(content_type, 'Visual analysis: ')
+        
+        # Extract the most relevant parts of the content
+        content_lines = [line.strip() for line in content.split('\n') if line.strip()]
+        
+        # Filter out metadata lines and focus on actual content
+        filtered_lines = []
+        for line in content_lines:
+            if not any(skip_word in line.lower() for skip_word in ['**', 'source:', 'page', 'relevance:', '🔍', '📄']):
+                filtered_lines.append(line)
+        
+        # Take the most substantive content
+        main_content = ' '.join(filtered_lines[:3]) if filtered_lines else content
+        
+        # Create concise response
+        if content_type in ['performance_chart', 'comparison_chart', 'data_chart']:
+            # For chart content, focus on the data insights
+            response = f"{prefix}{main_content}"
+        elif content_type == 'data_table':
+            # For table content, focus on the key data points
+            response = f"{prefix}{main_content}"
+        else:
+            # For general content, provide context-aware summary
+            response = f"Based on page {page_number} of {filename}: {main_content}"
+        
+        # Add subtle source context (for user transparency, but brief for re-ranker)
+        if len(response) < 200:  # Only add if response is concise
+            response += f" (from {filename}, page {page_number})"
+        
+        return response
+    
     def _generate_vlm_answer(self, query: str, doc_id: str, page_idx: int, doc_info: Dict) -> str:
         """Generate answer using precomputed VLM analysis or fallback methods."""
         
@@ -726,10 +812,9 @@ class ColPaliRetriever:
                 
                 precomputed_content = self.precomputed_vlm_content[doc_id][page_idx]
                 
-                # Adapt the precomputed content to the specific query
-                adapted_response = f"**Page {page_number} of '{filename}':**\n\n"
-                adapted_response += f"{precomputed_content}\n\n"
-                adapted_response += f"🔍 **Query Context**: This content was identified by ColPali as relevant to: *'{query}'*"
+                # Create query-focused response with improved content type hints
+                content_type = self._analyze_visual_content_type(precomputed_content, query)
+                adapted_response = self._format_visual_response(precomputed_content, query, filename, page_number, content_type)
                 
                 logger.info(f"✅ Using precomputed VLM content for {doc_id} page {page_idx}")
                 return adapted_response
@@ -747,11 +832,9 @@ class ColPaliRetriever:
                     # Found meaningful text content - return with query-relevant excerpt
                     relevant_excerpt = self._extract_query_relevant_text(text_content, query)
                     
-                    # Format the response with actual content
-                    response = f"**Page {page_number} of '{filename}':**\n\n"
-                    response += f"*{relevant_excerpt}*\n\n"
-                    response += f"📄 **Source**: {filename}, page {page_number}\n"
-                    response += f"🔍 **Relevance**: ColPali visual analysis identified this page as highly relevant to your query"
+                    # Analyze the content type for better response formatting
+                    content_type = self._analyze_visual_content_type(relevant_excerpt, query)
+                    response = self._format_visual_response(relevant_excerpt, query, filename, page_number, content_type)
                     
                     return response
         

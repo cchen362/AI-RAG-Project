@@ -200,19 +200,40 @@ class DocumentProcessor:
                         content += f"- {col}: (empty column)\n"
                 content += "\n"
 
-                # Add data in semantic sections (grouped for better chunking)
+                # Add data in semantic sections - create individual chunks
                 content += "#### Sheet Data:\n"
                 max_rows = self.config.get('excel_max_rows', 100)
                 
-                # Group rows for better chunking (every 15 rows)
-                for group_start in range(0, min(len(df), max_rows), 15):
-                    group_end = min(group_start + 15, len(df), max_rows)
-                    content += f"\n##### Rows {group_start + 1}-{group_end}:\n"
+                # Create individual semantic chunks for better retrieval
+                data_chunks = []
+                for idx in range(min(len(df), max_rows)):
+                    row = df.iloc[idx]
                     
-                    for idx in range(group_start, group_end):
-                        row = df.iloc[idx]
-                        row_text = " | ".join([f"{col}: {val}" for col, val in zip(df.columns, row.values)])
-                        content += f"Row {idx + 1}: {row_text}\n"
+                    # Create natural language descriptions based on column patterns
+                    natural_description = self._create_natural_row_description(row, df.columns)
+                    
+                    # Create a focused chunk with context
+                    chunk_content = f"### Sheet: {sheet_name} - Entry {idx + 1}\n\n{natural_description}\n\n"
+                    
+                    # Add key fields for better searchability
+                    key_fields = []
+                    for col_name, value in zip(df.columns, row.values):
+                        if pd.notna(value) and str(value).strip():
+                            key_fields.append(f"{col_name}: {value}")
+                    
+                    if key_fields:
+                        chunk_content += "Key fields: " + " | ".join(key_fields[:3]) + "\n"
+                    
+                    data_chunks.append(chunk_content)
+
+                # Store individual chunks for better retrieval
+                if hasattr(self, '_individual_chunks'):
+                    self._individual_chunks.extend(data_chunks)
+                else:
+                    self._individual_chunks = data_chunks
+                
+                # Add structured content
+                content += "\n".join(data_chunks)
 
                 if len(df) > max_rows:
                     content += f"\n... ({len(df) - max_rows} additional rows not shown)\n"
@@ -223,6 +244,143 @@ class DocumentProcessor:
     
         except Exception as e:
             raise Exception(f"failed to extract Excel content: {e}")
+    
+    def _create_natural_row_description(self, row, columns):
+        """Convert a data row into natural language description."""
+        # Detect common data patterns and create appropriate descriptions
+        
+        # Personnel/Employee data pattern
+        if any(col.lower() in ['name', 'employee', 'person'] for col in columns):
+            return self._describe_person_row(row, columns)
+        
+        # Company/Organization data pattern
+        elif any(col.lower() in ['company', 'organization', 'business'] for col in columns):
+            return self._describe_company_row(row, columns)
+        
+        # Financial/Revenue data pattern
+        elif any(col.lower() in ['revenue', 'sales', 'income', 'profit'] for col in columns):
+            return self._describe_financial_row(row, columns)
+        
+        # Product/Item data pattern
+        elif any(col.lower() in ['product', 'item', 'service'] for col in columns):
+            return self._describe_product_row(row, columns)
+        
+        # Generic fallback - create readable sentence
+        else:
+            return self._describe_generic_row(row, columns)
+    
+    def _describe_person_row(self, row, columns):
+        """Create natural language description for person/employee data."""
+        # Find key fields
+        name = self._get_field_value(row, columns, ['name', 'employee', 'person'])
+        role = self._get_field_value(row, columns, ['role', 'position', 'title', 'job'])
+        department = self._get_field_value(row, columns, ['department', 'dept', 'division', 'team'])
+        experience = self._get_field_value(row, columns, ['experience', 'years', 'tenure'])
+        
+        # Build natural description
+        if name:
+            desc = f"{name}"
+            if role:
+                desc += f" works as a {role}"
+            if department:
+                desc += f" in the {department} department"
+            if experience:
+                desc += f" with {experience} of experience"
+            desc += "."
+            return desc
+        
+        return self._describe_generic_row(row, columns)
+    
+    def _describe_company_row(self, row, columns):
+        """Create natural language description for company data."""
+        company = self._get_field_value(row, columns, ['company', 'organization', 'business', 'name'])
+        industry = self._get_field_value(row, columns, ['industry', 'sector', 'field'])
+        revenue = self._get_field_value(row, columns, ['revenue', 'sales', 'income'])
+        employees = self._get_field_value(row, columns, ['employees', 'staff', 'workforce'])
+        
+        if company:
+            desc = f"{company}"
+            if industry:
+                desc += f" operates in the {industry} industry"
+            if revenue:
+                desc += f" with revenue of {self._format_number(revenue)}"
+            if employees:
+                desc += f" and employs {self._format_number(employees)} people"
+            desc += "."
+            return desc
+        
+        return self._describe_generic_row(row, columns)
+    
+    def _describe_financial_row(self, row, columns):
+        """Create natural language description for financial data."""
+        entity = self._get_field_value(row, columns, ['company', 'name', 'entity'])
+        revenue = self._get_field_value(row, columns, ['revenue', 'sales', 'income'])
+        profit = self._get_field_value(row, columns, ['profit', 'earnings', 'net_income'])
+        
+        if entity and revenue:
+            desc = f"{entity} generated {self._format_number(revenue)} in revenue"
+            if profit:
+                desc += f" with {self._format_number(profit)} profit"
+            desc += "."
+            return desc
+        
+        return self._describe_generic_row(row, columns)
+    
+    def _describe_product_row(self, row, columns):
+        """Create natural language description for product data."""
+        product = self._get_field_value(row, columns, ['product', 'item', 'service', 'name'])
+        category = self._get_field_value(row, columns, ['category', 'type', 'class'])
+        price = self._get_field_value(row, columns, ['price', 'cost', 'value'])
+        
+        if product:
+            desc = f"{product}"
+            if category:
+                desc += f" is a {category}"
+            if price:
+                desc += f" priced at {self._format_number(price)}"
+            desc += "."
+            return desc
+        
+        return self._describe_generic_row(row, columns)
+    
+    def _describe_generic_row(self, row, columns):
+        """Create generic natural language description."""
+        # Take the first few non-null values and create a sentence
+        parts = []
+        for col, val in zip(columns, row.values):
+            if pd.notna(val) and str(val).strip():
+                parts.append(f"{col} is {val}")
+                if len(parts) >= 3:  # Limit to avoid overly long sentences
+                    break
+        
+        if parts:
+            return "The data shows " + ", ".join(parts) + "."
+        return "Data entry with multiple fields."
+    
+    def _get_field_value(self, row, columns, field_names):
+        """Get value for a field by trying multiple column name variations."""
+        for field_name in field_names:
+            for col in columns:
+                if field_name.lower() in col.lower():
+                    val = row[col]
+                    if pd.notna(val) and str(val).strip():
+                        return str(val)
+        return None
+    
+    def _format_number(self, value):
+        """Format numbers in a readable way."""
+        try:
+            num = float(str(value).replace(',', ''))
+            if num >= 1e9:
+                return f"${num/1e9:.1f} billion"
+            elif num >= 1e6:
+                return f"${num/1e6:.1f} million"
+            elif num >= 1e3:
+                return f"${num/1e3:.1f} thousand"
+            else:
+                return f"${num:,.0f}"
+        except:
+            return str(value)
         
     def _extract_text_content(self, file_path: str) -> str:
         """Extract plaint text."""
@@ -251,20 +409,42 @@ class DocumentProcessor:
                 content += f"- {col}: {sample_str}...\n"
             content += "\n"
             
-            # Add data in semantic sections
+            # Add data in semantic sections - create separate chunks per row
             content += "### Data Content:\n"
             max_rows = self.config.get('csv_max_rows', 50)
             
-            # Group rows for better chunking (every 10 rows)
-            for group_start in range(0, min(len(df), max_rows), 10):
-                group_end = min(group_start + 10, len(df), max_rows)
-                content += f"\n#### Rows {group_start + 1}-{group_end}:\n"
+            # Create individual semantic chunks for better retrieval
+            data_chunks = []
+            for idx in range(min(len(df), max_rows)):
+                row = df.iloc[idx]
                 
-                for idx in range(group_start, group_end):
-                    row = df.iloc[idx]
-                    row_text = " | ".join([f"{col}: {val}" for col, val in zip(df.columns, row.values)])
-                    content += f"Row {idx + 1}: {row_text}\n"
+                # Create natural language descriptions based on column patterns
+                natural_description = self._create_natural_row_description(row, df.columns)
+                
+                # Create a focused chunk with context
+                filename = os.path.basename(file_path).replace('.csv', '')
+                chunk_content = f"### CSV: {filename} - Entry {idx + 1}\n\n{natural_description}\n\n"
+                
+                # Add key fields for better searchability
+                key_fields = []
+                for col_name, value in zip(df.columns, row.values):
+                    if pd.notna(value) and str(value).strip():
+                        key_fields.append(f"{col_name}: {value}")
+                
+                if key_fields:
+                    chunk_content += "Key fields: " + " | ".join(key_fields[:3]) + "\n"
+                
+                data_chunks.append(chunk_content)
 
+            # Store individual chunks for better retrieval (temporary approach)
+            if hasattr(self, '_individual_chunks'):
+                self._individual_chunks.extend(data_chunks)
+            else:
+                self._individual_chunks = data_chunks
+            
+            # For now, still return combined content but structured better
+            content += "\n".join(data_chunks)
+            
             if len(df) > max_rows:
                 content += f"\n... ({len(df) - max_rows} additional rows not shown)\n"
 

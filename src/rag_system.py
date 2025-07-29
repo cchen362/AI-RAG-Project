@@ -202,15 +202,37 @@ class RAGSystem:
             
             logger.info(f"✅ Extracted {len(content)} characters of content")
             
-            # 2. Create text chunks
+            # 2. Create text chunks with appropriate strategy
             logger.debug("Step 2: Creating text chunks...")
-            chunks = self.text_chunker.chunk_text(
-                content, 
-                source_metadata={
-                    'filename': os.path.basename(doc_path),
-                    'source_path': doc_path
-                }
-            )
+            file_extension = os.path.splitext(doc_path)[1].lower()
+            
+            # Choose chunking strategy based on file type
+            if file_extension in ['.csv', '.xlsx', '.xls']:
+                # Use structured data chunking for tabular data
+                structured_chunker = TextChunker(
+                    chunk_size=self.config.get('chunk_size', 1000),
+                    overlap=self.config.get('chunk_overlap', 200),
+                    strategy="structured_data"
+                )
+                chunks = structured_chunker.chunk_text(
+                    content, 
+                    source_metadata={
+                        'filename': os.path.basename(doc_path),
+                        'source_path': doc_path,
+                        'file_type': 'structured_data'
+                    }
+                )
+                logger.info(f"Using structured_data chunking for {file_extension} file")
+            else:
+                # Use default semantic chunking for other files
+                chunks = self.text_chunker.chunk_text(
+                    content, 
+                    source_metadata={
+                        'filename': os.path.basename(doc_path),
+                        'source_path': doc_path,
+                        'file_type': 'text'
+                    }
+                )
             
             if not chunks:
                 logger.error("❌ No chunks created from content")
@@ -588,34 +610,173 @@ class RAGSystem:
         """Extract specific data from CSV/structured content and present naturally."""
         question_lower = question.lower()
         
-        # Look for highest/most revenue queries
+        # Handle personnel/staff queries (who is, senior dev, etc.)
+        if any(term in question_lower for term in ['who is', 'senior', 'developer', 'manager', 'employee']):
+            return self._extract_personnel_info(question, content)
+        
+        # Handle highest/most revenue queries
         if 'highest' in question_lower and 'revenue' in question_lower:
-            # Parse revenue data from structured content
-            lines = content.split('\n')
-            revenues = []
+            return self._extract_revenue_info(question, content)
             
-            for line in lines:
-                if 'revenue:' in line.lower() or '|' in line:
-                    # Extract company and revenue information
-                    parts = line.split('|') if '|' in line else [line]
-                    for part in parts:
-                        if 'revenue' in part.lower() and any(char.isdigit() for char in part):
-                            revenues.append(line.strip())
+        # Handle company listing queries
+        if any(term in question_lower for term in ['companies', 'company', 'organizations']):
+            return self._extract_company_list(question, content)
             
-            if revenues:
-                # Find the highest revenue entry
-                highest_revenue_line = max(revenues, key=lambda x: self._extract_number(x))
-                company_name = self._extract_company_name(highest_revenue_line)
-                revenue_amount = self._format_revenue(self._extract_number(highest_revenue_line))
+        # Handle count/number queries
+        if any(term in question_lower for term in ['how many', 'count', 'number of']):
+            return self._extract_count_info(question, content)
+        
+        # General data extraction - convert structured format to natural language
+        return self._convert_structured_to_natural(content)
+    
+    def _extract_personnel_info(self, question: str, content: str) -> str:
+        """Extract personnel information from structured data."""
+        question_lower = question.lower()
+        lines = content.split('\n')
+        
+        # Look for personnel records
+        for line in lines:
+            if 'senior' in question_lower and 'senior' in line.lower():
+                name = self._extract_field_value(line, ['name', 'employee'])
+                role = self._extract_field_value(line, ['role', 'position', 'title'])
+                department = self._extract_field_value(line, ['department', 'dept'])
                 
-                return f"Based on the data, {company_name} has the highest revenue at {revenue_amount}."
+                if name:
+                    result = f"{name}"
+                    if role:
+                        result += f" is the {role}"
+                    if department:
+                        result += f" in the {department} department"
+                    result += "."
+                    return result
         
-        # Fallback to showing structured data in a readable format
+        # Fallback: look for any personnel data
+        personnel_lines = [line for line in lines if any(field in line.lower() for field in ['name:', 'employee:', 'role:', 'department:'])]
+        if personnel_lines:
+            # Parse first personnel entry
+            first_entry = personnel_lines[0]
+            name = self._extract_field_value(first_entry, ['name', 'employee'])
+            role = self._extract_field_value(first_entry, ['role', 'position'])
+            
+            if name and role:
+                return f"Based on the available data, {name} works as a {role}."
+                
+        return "I found personnel data but couldn't identify the specific person you're asking about."
+    
+    def _extract_revenue_info(self, question: str, content: str) -> str:
+        """Extract revenue information from structured data."""
+        lines = content.split('\n')
+        revenues = []
+        
+        for line in lines:
+            if 'revenue:' in line.lower() or ('|' in line and any(char.isdigit() for char in line)):
+                revenues.append(line.strip())
+        
+        if revenues:
+            # Find the highest revenue entry
+            highest_revenue_line = max(revenues, key=lambda x: self._extract_number(x))
+            company_name = self._extract_company_name(highest_revenue_line)
+            revenue_amount = self._format_revenue(self._extract_number(highest_revenue_line))
+            
+            return f"Based on the data, {company_name} has the highest revenue at {revenue_amount}."
+        
+        return "I found financial data but couldn't determine the highest revenue."
+    
+    def _extract_company_list(self, question: str, content: str) -> str:
+        """Extract list of companies from structured data."""
+        lines = content.split('\n')
+        companies = []
+        
+        for line in lines:
+            if 'company:' in line.lower() or ('|' in line and 'row' in line.lower()):
+                company = self._extract_field_value(line, ['company', 'name'])
+                if company and company not in companies:
+                    companies.append(company)
+        
+        if companies:
+            if len(companies) == 1:
+                return f"The company mentioned is {companies[0]}."
+            elif len(companies) <= 3:
+                return f"The companies mentioned are {', '.join(companies[:-1])} and {companies[-1]}."
+            else:
+                return f"The companies include {', '.join(companies[:3])} and {len(companies)-3} others."
+        
+        return "I found company data but couldn't extract the company names clearly."
+    
+    def _extract_count_info(self, question: str, content: str) -> str:
+        """Extract count information from structured data."""
+        lines = [line for line in content.split('\n') if line.strip() and 'row' in line.lower()]
+        count = len(lines)
+        
+        if 'employee' in question.lower() or 'person' in question.lower():
+            return f"There are {count} employees in the dataset."
+        elif 'company' in question.lower():
+            return f"There are {count} companies listed."
+        else:
+            return f"The dataset contains {count} entries."
+    
+    def _convert_structured_to_natural(self, content: str) -> str:
+        """Convert structured data format to natural language."""
         lines = [line.strip() for line in content.split('\n') if line.strip() and not line.startswith('Column')]
-        if lines:
-            return f"From the data: {'. '.join(lines[:3])}."
         
-        return "I found relevant data but couldn't extract a specific answer."
+        if not lines:
+            return "I found some data but couldn't interpret it clearly."
+        
+        # Try to identify the data structure
+        first_line = lines[0]
+        
+        # Check if it's personnel data
+        if any(field in first_line.lower() for field in ['name:', 'employee:', 'role:', 'department:']):
+            name = self._extract_field_value(first_line, ['name', 'employee'])
+            role = self._extract_field_value(first_line, ['role', 'position'])
+            dept = self._extract_field_value(first_line, ['department', 'dept'])
+            
+            result = "The data shows "
+            if name:
+                result += f"{name}"
+                if role:
+                    result += f" works as a {role}"
+                if dept:
+                    result += f" in the {dept} department"
+            result += "."
+            return result
+            
+        # Check if it's company data
+        elif any(field in first_line.lower() for field in ['company:', 'revenue:', 'industry:']):
+            company = self._extract_field_value(first_line, ['company', 'name'])
+            revenue = self._extract_field_value(first_line, ['revenue'])
+            
+            result = "The data shows "
+            if company:
+                result += f"{company}"
+                if revenue:
+                    try:
+                        revenue_num = self._extract_number(revenue)
+                        formatted_revenue = self._format_revenue(revenue_num)
+                        result += f" with revenue of {formatted_revenue}"
+                    except:
+                        result += f" with revenue information"
+            result += "."
+            return result
+        
+        # Generic fallback - extract key information
+        return f"The data contains information about {len(lines)} entries with various details."
+    
+    def _extract_field_value(self, text: str, field_names: List[str]) -> str:
+        """Extract value for a specific field from structured text."""
+        text_lower = text.lower()
+        
+        for field in field_names:
+            if f"{field}:" in text_lower:
+                # Extract value after field name
+                parts = text.split(f"{field}:", 1)
+                if len(parts) > 1:
+                    value = parts[1].split('|')[0].strip()
+                    # Clean up the value
+                    value = value.replace('Row 1:', '').replace('Row 2:', '').replace('Row 3:', '').strip()
+                    return value
+        
+        return ""
     
     def _extract_number(self, text: str) -> float:
         """Extract largest number from text."""
@@ -831,7 +992,8 @@ class MultiModalRAGSystem:
         
         if self.mode == 'hybrid':
             # Initialize multi-modal database
-            text_dim = 384 if self.config.get('text_embedding_model', 'local') == 'local' else 1536
+            # Fixed: Use 512 for OpenAI text-embedding-3-large with dimensions=512
+            text_dim = 512
             self.multimodal_db = MultiModalVectorDatabase(
                 text_dimension=text_dim,
                 visual_dimension=128

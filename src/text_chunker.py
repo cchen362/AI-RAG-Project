@@ -56,6 +56,8 @@ class TextChunker:
             return self._chunk_by_paragraphs(text, source_metadata)
         elif self.strategy == "semantic":
             return self._chunk_by_semantic_sections(text, source_metadata)
+        elif self.strategy == "structured_data":
+            return self._chunk_by_structured_data(text, source_metadata)
         else:
             raise ValueError(f"Unknown chunking strategy: {self.strategy}")
         
@@ -327,6 +329,46 @@ class TextChunker:
                     chunks.append(section_chunk)
                     chunk_num += 1
 
+        return chunks
+    
+    def _chunk_by_structured_data(self, text: str, source_metadata: Dict) -> List[TextChunk]:
+        """
+        Structured data chunking - specifically for CSV/Excel data entries.
+        
+        Creates individual chunks for each data entry to improve retrieval granularity.
+        """
+        chunks = []
+        
+        # Look for individual data entries marked by "### Sheet: SheetName - Entry N"
+        entry_pattern = r'### Sheet: .+ - Entry \d+\n\n.+?(?=### Sheet: .+ - Entry \d+|\Z)'
+        entries = re.findall(entry_pattern, text, re.DOTALL)
+        
+        if entries:
+            # Process individual entries
+            start_pos = 0
+            for i, entry in enumerate(entries):
+                entry = entry.strip()
+                if entry:
+                    end_pos = start_pos + len(entry)
+                    
+                    chunk = TextChunk(
+                        content=entry,
+                        start_index=start_pos,
+                        end_index=end_pos,
+                        chunk_id=f"data_entry_{i+1:03d}",
+                        metadata={
+                            'chunk_method': 'structured_data_entry',
+                            'entry_number': i + 1,
+                            'word_count': len(entry.split()),
+                            **source_metadata
+                        }
+                    )
+                    chunks.append(chunk)
+                    start_pos = end_pos
+        else:
+            # Fallback to semantic chunking if no structured pattern found
+            return self._chunk_by_semantic_sections(text, source_metadata)
+        
         return chunks
     
     def analyze_chunking_quality(self, chunks: List[TextChunk]) -> Dict[str, Any]:
