@@ -815,7 +815,7 @@ def main():
                         backdrop-filter: blur(15px);
                         border: 1px solid {border_color};
                         border-radius: 12px;
-                        padding: 0.75rem;
+                        padding: 0.65rem 0.75rem;
                         margin-bottom: 0.5rem;
                         text-align: center;
                         height: 60px;
@@ -823,12 +823,13 @@ def main():
                         flex-direction: column;
                         justify-content: center;
                         align-items: center;
+                        box-sizing: border-box;
                         transition: all 0.3s ease;
                     }}
                     """
                 ):
-                    st.markdown(f'<div style="color: rgba(255,255,255,0.7); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem; line-height: 1.2;">{label}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="color: {color}; font-weight: 600; font-size: 1rem;">{value}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="color: rgba(255,255,255,0.7); font-size: 0.75rem; text-transform: uppercase; margin: 0 0 3px 0; line-height: 1.1; text-align: center;">{label}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="color: {color}; font-weight: 600; font-size: 1rem; text-align: center; line-height: 1.1; margin: 0;">{value}</div>', unsafe_allow_html=True)
         
         # System Status Glass Panel
         with stylable_container(
@@ -1012,43 +1013,43 @@ def main():
                     ):
                         tokens = chat['token_breakdown']
                         
-                        # Working Token Counter - Copied from test_glassmorphism_fixed.py
-                        working_token_counter = f"""
-                        <div style="background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(10px); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15); padding: 8px 12px; margin: 8px 0 4px 0;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Query</div>
+                        # Clean Token Counter - No background layer, perfect centering
+                        clean_token_counter = f"""
+                        <div style="padding: 8px 12px; margin: 8px 0 4px 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; min-height: 45px;">
+                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Query</div>
                                     <div style="color: #64b5f6; font-weight: 600;">{tokens['query_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Text RAG</div>
+                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Text RAG</div>
                                     <div style="color: #64b5f6; font-weight: 600;">{tokens['text_rag_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">VLM</div>
+                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">VLM</div>
                                     <div style="color: #64b5f6; font-weight: 600;">{tokens['vlm_analysis_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">SF</div>
+                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">SF</div>
                                     <div style="color: #64b5f6; font-weight: 600;">{tokens['salesforce_api_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Re-rank</div>
+                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Re-rank</div>
                                     <div style="color: #64b5f6; font-weight: 600;">{tokens['reranker_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Response</div>
+                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Response</div>
                                     <div style="color: #64b5f6; font-weight: 600;">{tokens['response_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1; border-left: 1px solid rgba(255, 255, 255, 0.2); padding-left: 8px;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Total</div>
+                                <div style="text-align: center; flex: 1; border-left: 1px solid rgba(255, 255, 255, 0.2); padding-left: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Total</div>
                                     <div style="color: #81c784; font-weight: 600;">{tokens['total_tokens']}</div>
                                 </div>
                             </div>
                         </div>
                         """
                         
-                        st.markdown(working_token_counter, unsafe_allow_html=True)
+                        st.markdown(clean_token_counter, unsafe_allow_html=True)
                     
                     # Source and timestamp
                     source_icons = {'text': '📝', 'visual': '🖼️', 'salesforce': '🏢'}
