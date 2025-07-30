@@ -78,6 +78,60 @@ def check_model_cache():
     else:
         return False, f"No model cache directories found: {missing}"
 
+def check_gpu_availability():
+    """Check GPU availability and CUDA setup"""
+    try:
+        import torch
+        
+        if torch.cuda.is_available():
+            gpu_count = torch.cuda.device_count()
+            gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
+            cuda_version = torch.version.cuda
+            
+            # Test GPU memory allocation
+            try:
+                test_tensor = torch.randn(10, 10).cuda()
+                memory_allocated = torch.cuda.memory_allocated(0) / 1024**2  # MB
+                torch.cuda.empty_cache()
+                
+                return True, f"GPU OK - {gpu_name} (CUDA {cuda_version}, {gpu_count} devices, {memory_allocated:.1f}MB test)"
+            except Exception as e:
+                return False, f"GPU detected but memory allocation failed: {e}"
+        else:
+            # Check if this is expected (CPU-only deployment)
+            model_device = os.getenv('MODEL_DEVICE', 'cpu')
+            if model_device == 'cpu':
+                return True, "CPU mode - GPU not required"
+            else:
+                return False, "GPU expected but not available"
+                
+    except ImportError:
+        return False, "PyTorch not available for GPU check"
+    except Exception as e:
+        return False, f"GPU check failed: {e}"
+
+def check_docker_optimization():
+    """Check Docker-specific optimizations"""
+    checks = []
+    
+    # Check if running in Docker
+    if os.path.exists('/.dockerenv'):
+        checks.append("Docker environment detected")
+    else:
+        checks.append("Not running in Docker (local mode)")
+    
+    # Check pre-loaded models flag
+    if os.getenv('DOCKER_PRELOADED_MODELS') == 'true':
+        checks.append("Pre-loaded models enabled")
+    else:
+        checks.append("Pre-loaded models disabled")
+    
+    # Check model device setting
+    model_device = os.getenv('MODEL_DEVICE', 'auto')
+    checks.append(f"Model device: {model_device}")
+    
+    return True, " | ".join(checks)
+
 def main():
     """Run all health checks"""
     print("🏥 AI-RAG-Project Health Check")
@@ -85,8 +139,10 @@ def main():
     
     checks = [
         ("Environment", check_environment),
+        ("Docker Config", check_docker_optimization),
         ("Model Cache", check_model_cache),
         ("Model Manifest", check_model_manifest),
+        ("GPU/CUDA", check_gpu_availability),
         ("Streamlit App", check_streamlit_health)
     ]
     

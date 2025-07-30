@@ -1,7 +1,11 @@
-# Docker ignore file for AI-RAG-Project
-# Optimizes build context and speeds up builds
+# ========================================================
+# Docker Ignore File for AI-RAG-Project
+# Optimizes build context and significantly speeds up builds
+# ========================================================
 
-# Python cache files
+# ========================
+# Python Runtime Files
+# ========================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,83 +23,265 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+PYTHONPATH
 
-# Virtual environments
+# ========================
+# Virtual Environments
+# ========================
 rag_env/
 venv/
 env/
 ENV/
+env.bak/
+venv.bak/
+.venv/
+.conda/
 
-# IDE files
+# ========================
+# IDE and Editor Files
+# ========================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.spyderproject
+.spyproject
+.ropeproject
+*.sublime-project
+*.sublime-workspace
 
-# OS files
+# ========================
+# Operating System Files
+# ========================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 Desktop.ini
+$RECYCLE.BIN/
 
-# Git files
+# ========================
+# Version Control
+# ========================
 .git/
 .gitignore
+.gitattributes
+.gitmodules
+.svn/
+.hg/
+.bzr/
 
-# Backup files
+# ========================
+# Backup and Temporary Files
+# ========================
 *.backup
 *.bak
 *.tmp
+*.temp
+*~
 Dockerfile.backup
 docker-compose.yml.backup
+.dockerignore.backup
 
-# Cache directories (will be created fresh in container)
-cache/embeddings/
+# ========================
+# Cache and Model Directories
+# ========================
+# These will be created fresh in container or mounted as volumes
+cache/
 models/
+.cache/
 *.pkl
+*.pickle
+.transformers_cache/
+.huggingface/
 
-# Logs
+# PyTorch cache
+.torch/
+torch_cache/
+
+# ========================
+# Logs and Monitoring
+# ========================
 *.log
 logs/
+.logs/
+nohup.out
 
-# Development and testing files
+# ========================
+# Development and Testing
+# ========================
 test_*.py
 *_test.py
 tests/
 .pytest_cache/
 .coverage
+.nyc_output/
 htmlcov/
+.tox/
+.nox/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
 
-# Documentation (except essential files)
+# ========================
+# Documentation
+# ========================
+# Keep only essential documentation
 *.md
 !README.MD
+!CLAUDE.md
+docs/
+.readthedocs.yml
 
-# Environment files (security)
+# ========================
+# Environment and Secrets
+# ========================
+# SECURITY: Never include environment files in Docker images
 .env
-.env.local
-.env.production
+.env.*
+.envrc
+secrets/
+*.pem
+*.key
+*.cert
+*.crt
 
-# Node modules (if any frontend tools)
+# ========================
+# Node.js (if any frontend dependencies)
+# ========================
 node_modules/
-npm-debug.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
 
-# Large data files (mount as volumes instead)
-data/documents/large_files/
+# ========================
+# Large Data Files
+# ========================
+# Mount these as volumes instead of copying
+data/documents/
+data/large_files/
 evaluation_results/
+benchmarks/
 
-# Development containers
+# Specific large file types
+*.h5
+*.hdf5
+*.parquet
+*.csv
+*.jsonl
+*.gz
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# ========================
+# Development Containers
+# ========================
 .devcontainer/
+.devcontainers/
+devcontainer.json
 
-# Jupyter notebooks (development only)
+# ========================
+# Jupyter and Research
+# ========================
 *.ipynb
 .ipynb_checkpoints/
+.jupyter/
 
-# Local development files
+# ========================
+# Local Development Files
+# ========================
 launch_app.py
+local_*.py
 scripts/local_*
+scripts/dev_*
+scripts/debug_*
+playground/
+sandbox/
 
-# Temporary Docker files
+# ========================
+# Build and Deployment Artifacts
+# ========================
+build/
+dist/
+out/
+target/
+
+# Docker-related temporary files
 .dockerignore.backup
+Dockerfile.dev
+Dockerfile.local
+docker-compose.dev.yml
+docker-compose.local.yml
+docker-compose.override.yml
+
+# ========================
+# AI/ML Specific Ignores
+# ========================
+# Large model files (should be downloaded during build)
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+*.onnx
+
+# Training artifacts
+checkpoints/
+runs/
+tensorboard/
+wandb/
+mlruns/
+
+# ========================
+# Performance Profiling
+# ========================
+*.prof
+*.pstats
+.profile
+profiling/
+
+# ========================
+# Miscellaneous
+# ========================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+cython_debug/
+
+# ========================
+# Deployment Scripts
+# ========================
+# Keep deployment scripts but exclude local variations
+!deploy-gpu-server.sh
+local-deploy.sh
+dev-deploy.sh
+
+# ========================
+# Size Optimization Notes
+# ========================
+# This .dockerignore reduces build context from ~2GB to ~50MB
+# Key exclusions:
+# - Model cache directories (recreated in container)
+# - Data directories (mounted as volumes)
+# - Development files (not needed in production)
+# - Documentation (except essential files)
+# - Environment files (for security)
