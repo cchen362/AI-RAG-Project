@@ -5,8 +5,8 @@ services:
   ai-rag-app:
     build: 
       context: .
-      target: production
-    image: ai-rag-app:latest
+      target: cpu-production
+    image: ai-rag-app:cpu
     container_name: ai-rag-cpu
     ports:
       - "8501:8501"
@@ -15,11 +15,13 @@ services:
       - STREAMLIT_SERVER_HEADLESS=true
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
       
       # Docker optimization flags
       - DOCKER_PRELOADED_MODELS=true
       - RAG_DATA_DIR=/app/data
       - RAG_CACHE_DIR=/app/cache
+      - MODEL_DEVICE=cpu
       
       # Model cache paths (pre-loaded models)
       - TRANSFORMERS_CACHE=/app/models/transformers
@@ -38,40 +40,64 @@ services:
       - POPPLER_PATH=${POPPLER_PATH:-}
     volumes:
       # Persistent data storage
-      - ./data:/app/data
-      - ./cache:/app/cache
-      # Optional: Mount local model cache to avoid rebuilds during development
-      - ai_rag_models:/app/models
+      - ./data:/app/data:rw
+      - ./cache:/app/cache:rw
+      - ./logs:/app/logs:rw
+      # Pre-loaded model cache (read-only for security)
+      - ai_rag_models:/app/models:ro
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Streamlit needs write access to temp dirs
+    tmpfs:
+      - /tmp
+      - /var/tmp
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 4G
+          cpus: '2.0'
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health')"]
+      test: ["CMD", "python", "scripts/health_check.py"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
       start_period: 60s
     
-  # GPU-accelerated service (optional)
+  # GPU-accelerated service (production-ready)
   ai-rag-app-gpu:
     build: 
       context: .
-      target: production
-      # For future GPU builds: target: gpu-production
+      target: gpu-production
     image: ai-rag-app:gpu
     container_name: ai-rag-gpu
     ports:
       - "8502:8501"  # Different port to avoid conflicts
     environment:
-      # All CPU environment variables plus GPU-specific
+      # Core application settings
       - STREAMLIT_SERVER_HEADLESS=true
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
+      
+      # Docker optimization flags
       - DOCKER_PRELOADED_MODELS=true
       - RAG_DATA_DIR=/app/data
       - RAG_CACHE_DIR=/app/cache
+      - MODEL_DEVICE=cuda
+      
+      # Model cache paths (pre-loaded models)
       - TRANSFORMERS_CACHE=/app/models/transformers
       - HF_HOME=/app/models/huggingface
       - TORCH_HOME=/app/models/torch
+      
+      # API Keys (optional - local embeddings work without)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      
+      # Salesforce integration (optional)
       - SALESFORCE_USERNAME=${SALESFORCE_USERNAME:-}
       - SALESFORCE_PASSWORD=${SALESFORCE_PASSWORD:-}
       - SALESFORCE_SECURITY_TOKEN=${SALESFORCE_SECURITY_TOKEN:-}
@@ -81,53 +107,119 @@ services:
       
       # GPU-specific settings
       - CUDA_VISIBLE_DEVICES=0
-      - TORCH_CUDA_ARCH_LIST=6.0;6.1;7.0;7.5;8.0;8.6
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - TORCH_CUDA_ARCH_LIST=6.0;6.1;7.0;7.5;8.0;8.6;9.0
+      
+      # Memory and performance optimization
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+      - CUDA_LAUNCH_BLOCKING=0
     volumes:
-      - ./data:/app/data
-      - ./cache:/app/cache
-      - ai_rag_models:/app/models
+      # Persistent data storage
+      - ./data:/app/data:rw
+      - ./cache:/app/cache:rw
+      - ./logs:/app/logs:rw
+      # Pre-loaded model cache (read-only for security)
+      - ai_rag_models_gpu:/app/models:ro
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Streamlit needs write access
+    tmpfs:
+      - /tmp
+      - /var/tmp
     deploy:
       resources:
+        limits:
+          memory: 16G
+          cpus: '8.0'
         reservations:
+          memory: 8G
+          cpus: '4.0'
           devices:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health')"]
+      test: ["CMD", "python", "scripts/health_check.py"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
-      start_period: 60s
+      start_period: 90s
     profiles:
       - gpu  # Only start with --profile gpu
 
-  # Model builder service (for development/debugging)
-  model-builder:
+  # CPU Model builder service (for development/debugging)
+  cpu-model-builder:
     build:
       context: .
-      target: model-builder
-    image: ai-rag-models:latest
-    container_name: ai-rag-model-builder
+      target: cpu-model-builder
+    image: ai-rag-models:cpu
+    container_name: ai-rag-cpu-model-builder
     environment:
       - TRANSFORMERS_CACHE=/app/models/transformers
       - HF_HOME=/app/models/huggingface
       - TORCH_HOME=/app/models/torch
+      - MODEL_DEVICE=cpu
     volumes:
-      - ai_rag_models:/app/models
+      - ai_rag_models:/app/models:rw
     command: ["python", "scripts/warm_up_models.py"]
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
     profiles:
       - build-models  # Only start with --profile build-models
 
+  # GPU Model builder service (for development/debugging)
+  gpu-model-builder:
+    build:
+      context: .
+      target: gpu-model-builder
+    image: ai-rag-models:gpu
+    container_name: ai-rag-gpu-model-builder
+    environment:
+      - TRANSFORMERS_CACHE=/app/models/transformers
+      - HF_HOME=/app/models/huggingface
+      - TORCH_HOME=/app/models/torch
+      - MODEL_DEVICE=cuda
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - ai_rag_models_gpu:/app/models:rw
+    command: ["python", "scripts/warm_up_models.py"]
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: '8.0'
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - build-gpu-models  # Only start with --profile build-gpu-models
+
 # Named volumes for persistent model storage
 volumes:
+  # CPU model cache
   ai_rag_models:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ./models
+      device: ./models/cpu
+  
+  # GPU model cache (separate for optimization)
+  ai_rag_models_gpu:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./models/gpu
 
 # Networks for service isolation (optional)
 networks:
@@ -135,26 +227,65 @@ networks:
     name: ai-rag-network
     driver: bridge
 
-# Usage Examples:
+# =============================================
+# Usage Examples and Deployment Instructions
+# =============================================
 # 
-# CPU mode (default):
-#   docker-compose up ai-rag-app
+# CPU mode (default - production ready):
+#   docker-compose up -d ai-rag-app
+#   Access: http://localhost:8501
 #
-# GPU mode (requires nvidia-docker):
-#   docker-compose --profile gpu up ai-rag-app-gpu
+# GPU mode (requires nvidia-container-toolkit):
+#   docker-compose --profile gpu up -d ai-rag-app-gpu
+#   Access: http://localhost:8502
 #
-# Build models only:
-#   docker-compose --profile build-models up model-builder
+# Model pre-building (development):
+#   CPU models: docker-compose --profile build-models up cpu-model-builder
+#   GPU models: docker-compose --profile build-gpu-models up gpu-model-builder
 #
-# Full development setup:
-#   docker-compose up --build
+# Development mode (with logs):
+#   docker-compose up ai-rag-app  # No -d flag to see logs
 #
-# Production deployment:
-#   docker-compose -f docker-compose.yml up -d ai-rag-app
+# Full rebuild and deployment:
+#   docker-compose build && docker-compose up -d
 #
-# Environment variables can be set in .env file:
-#   OPENAI_API_KEY=your_key_here
-#   SALESFORCE_USERNAME=your_username
-#   SALESFORCE_PASSWORD=your_password
-#   SALESFORCE_SECURITY_TOKEN=your_token
-#   POPPLER_PATH=/custom/poppler/bin  # Optional: Override poppler location
+# Scale for load balancing:
+#   docker-compose up -d --scale ai-rag-app=3
+#
+# ========================================
+# Environment Configuration (.env file)
+# ========================================
+# Create a .env file in the project root:
+#
+#   # API Keys (optional - local embeddings work without)
+#   OPENAI_API_KEY=your_openai_key_here
+#   
+#   # Salesforce Integration (optional)
+#   SALESFORCE_USERNAME=your_salesforce_username
+#   SALESFORCE_PASSWORD=your_salesforce_password
+#   SALESFORCE_SECURITY_TOKEN=your_salesforce_token
+#   
+#   # System Overrides (optional)
+#   POPPLER_PATH=/custom/poppler/bin
+#   MODEL_DEVICE=cuda  # or cpu
+#
+# ====================================
+# GPU Server Prerequisites (Linux)
+# ====================================
+# 1. Install NVIDIA drivers (470+ recommended)
+# 2. Install nvidia-container-toolkit:
+#    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+#    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+#      sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+#      sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+#    sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+#    sudo systemctl restart docker
+# 3. Verify GPU access: docker run --rm --gpus all nvidia/cuda:12.1-base-ubuntu20.04 nvidia-smi
+#
+# ===============================
+# Production Monitoring Commands
+# ===============================
+# View logs: docker-compose logs -f ai-rag-app
+# Check health: docker-compose ps
+# Monitor resources: docker stats
+# GPU monitoring: nvidia-smi -l 1

@@ -31,11 +31,42 @@ def setup_environment():
     
     # Set environment variables for model caching
     os.environ['TRANSFORMERS_CACHE'] = str(model_cache_dir / 'transformers')
-    os.environ['HF_HOME'] = str(model_cache_dir / 'huggingface')
+    os.environ['HF_HOME'] = str(model_cache_dir / 'huggingface') 
     os.environ['TORCH_HOME'] = str(model_cache_dir / 'torch')
     
+    # Detect and configure device
+    model_device = os.getenv('MODEL_DEVICE', 'auto')
+    if model_device == 'auto':
+        try:
+            import torch
+            model_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            os.environ['MODEL_DEVICE'] = model_device
+        except ImportError:
+            model_device = 'cpu'
+            os.environ['MODEL_DEVICE'] = model_device
+    
     logger.info(f"Model cache directory: {model_cache_dir}")
-    return model_cache_dir
+    logger.info(f"Target device: {model_device}")
+    
+    # GPU-specific optimizations
+    if model_device == 'cuda':
+        try:
+            import torch
+            if torch.cuda.is_available():
+                # Optimize GPU memory usage
+                os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
+                logger.info(f"GPU detected: {torch.cuda.get_device_name(0)}")
+                logger.info(f"CUDA version: {torch.version.cuda}")
+            else:
+                logger.warning("CUDA device requested but not available, falling back to CPU")
+                model_device = 'cpu'
+                os.environ['MODEL_DEVICE'] = model_device
+        except Exception as e:
+            logger.warning(f"GPU setup failed: {e}, falling back to CPU")
+            model_device = 'cpu'
+            os.environ['MODEL_DEVICE'] = model_device
+    
+    return model_cache_dir, model_device
 
 def warm_up_sentence_transformer():
     """Pre-load SentenceTransformer model"""
@@ -81,14 +112,22 @@ def warm_up_bge_reranker():
         logger.info(f"✅ BGE Re-ranker loaded successfully ({load_time:.2f}s)")
         logger.info(f"   Test score: {scores[0]:.4f}")
         
+        # GPU memory cleanup if applicable
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except:
+            pass
+        
         return True, load_time
         
     except Exception as e:
         logger.error(f"❌ BGE Re-ranker warm-up failed: {e}")
         return False, 0
 
-def warm_up_colpali():
-    """Pre-load ColPali model"""
+def warm_up_colpali(target_device='auto'):
+    """Pre-load ColPali model with device-specific optimization"""
     logger.info("🔄 Warming up ColPali (vidore/colqwen2-v1.0)...")
     start_time = time.time()
     
@@ -97,25 +136,55 @@ def warm_up_colpali():
         import torch
         
         # Determine device
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if target_device == 'auto':
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device = target_device
+            
         logger.info(f"   Using device: {device}")
         
-        # Load model with appropriate settings
+        # Load model with device-specific optimizations
         if device == "cuda":
-            model = ColQwen2.from_pretrained(
-                'vidore/colqwen2-v1.0',
-                torch_dtype=torch.bfloat16,
-                device_map="auto"
-            )
+            try:
+                # GPU-optimized loading
+                model = ColQwen2.from_pretrained(
+                    'vidore/colqwen2-v1.0',
+                    torch_dtype=torch.bfloat16,
+                    device_map="auto",
+                    low_cpu_mem_usage=True
+                )
+                
+                # Test GPU memory allocation
+                gpu_memory = torch.cuda.memory_allocated(0) / 1024**3  # GB
+                logger.info(f"   GPU memory allocated: {gpu_memory:.2f}GB")
+                
+            except Exception as gpu_error:
+                logger.warning(f"GPU loading failed: {gpu_error}, trying CPU fallback")
+                device = "cpu"
+                model = ColQwen2.from_pretrained(
+                    'vidore/colqwen2-v1.0',
+                    torch_dtype=torch.float32
+                )
+                model = model.to(device)
         else:
+            # CPU-optimized loading
             model = ColQwen2.from_pretrained(
                 'vidore/colqwen2-v1.0',
-                torch_dtype=torch.float32
+                torch_dtype=torch.float32,
+                low_cpu_mem_usage=True
             )
             model = model.to(device)
         
         # Load processor
         processor = ColQwen2Processor.from_pretrained('vidore/colqwen2-v1.0')
+        
+        # Performance test
+        if device == "cuda":
+            # Quick GPU inference test
+            test_input = torch.randn(1, 3, 224, 224).to(device)
+            with torch.no_grad():
+                _ = model.forward(test_input)
+            torch.cuda.empty_cache()
         
         load_time = time.time() - start_time
         logger.info(f"✅ ColPali loaded successfully ({load_time:.2f}s)")
@@ -158,15 +227,17 @@ def warm_up_torch_dependencies():
         logger.error(f"❌ PyTorch warm-up failed: {e}")
         return False, 0
 
-def create_model_manifest(results: Dict[str, Any], model_cache_dir: Path):
+def create_model_manifest(results: Dict[str, Any], model_cache_dir: Path, target_device: str):
     """Create a manifest file with model loading information"""
     
     manifest = {
         "warm_up_timestamp": time.time(),
+        "target_device": target_device,
         "models_loaded": results,
         "cache_directory": str(model_cache_dir),
         "total_models": len([r for r in results.values() if r["success"]]),
-        "total_load_time": sum([r["load_time"] for r in results.values() if r["success"]])
+        "total_load_time": sum([r["load_time"] for r in results.values() if r["success"]]),
+        "docker_optimized": os.getenv('DOCKER_PRELOADED_MODELS', 'false') == 'true'
     }
     
     manifest_path = model_cache_dir / "model_manifest.json"
@@ -186,33 +257,45 @@ def main():
     logger.info("🚀 Starting model warm-up for Docker pre-loading...")
     logger.info("=" * 60)
     
-    # Setup environment
-    model_cache_dir = setup_environment()
+    # Setup environment and get target device
+    model_cache_dir, target_device = setup_environment()
     
     # Track results
     results = {}
     total_start_time = time.time()
     
-    # Warm up each model
-    warm_up_functions = [
-        ("pytorch", warm_up_torch_dependencies),
-        ("sentence_transformer", warm_up_sentence_transformer),
-        ("bge_reranker", warm_up_bge_reranker),
-        ("colpali", warm_up_colpali)
-    ]
+    # Warm up each model with device awareness
+    if target_device == 'cuda':
+        warm_up_functions = [
+            ("pytorch", lambda: warm_up_torch_dependencies()),
+            ("sentence_transformer", lambda: warm_up_sentence_transformer()),
+            ("bge_reranker", lambda: warm_up_bge_reranker()),
+            ("colpali", lambda: warm_up_colpali(target_device))
+        ]
+        logger.info("🚀 GPU acceleration enabled - full model loading")
+    else:
+        warm_up_functions = [
+            ("pytorch", lambda: warm_up_torch_dependencies()),
+            ("sentence_transformer", lambda: warm_up_sentence_transformer()),
+            ("bge_reranker", lambda: warm_up_bge_reranker()),
+            ("colpali", lambda: warm_up_colpali(target_device))
+        ]
+        logger.info("💻 CPU mode - optimized model loading")
     
     for model_name, warm_up_func in warm_up_functions:
         try:
             success, load_time = warm_up_func()
             results[model_name] = {
                 "success": success,
-                "load_time": load_time
+                "load_time": load_time,
+                "device": target_device
             }
         except Exception as e:
             logger.error(f"❌ Critical error warming up {model_name}: {e}")
             results[model_name] = {
                 "success": False,
                 "load_time": 0,
+                "device": target_device,
                 "error": str(e)
             }
     
@@ -222,7 +305,7 @@ def main():
     failed_models = [k for k, v in results.items() if not v["success"]]
     
     # Create manifest
-    create_model_manifest(results, model_cache_dir)
+    create_model_manifest(results, model_cache_dir, target_device)
     
     # Final report
     logger.info("=" * 60)
@@ -237,13 +320,22 @@ def main():
     
     logger.info(f"⏱️ Total warm-up time: {total_time:.2f}s")
     logger.info(f"📁 Models cached in: {model_cache_dir}")
+    logger.info(f"💻 Target device: {target_device}")
     
     # Exit with appropriate code
     if failed_models:
         logger.warning("⚠️ Some models failed to load - Docker build may continue but functionality will be limited")
-        sys.exit(1) if len(failed_models) == len(results) else sys.exit(0)
+        if len(failed_models) == len(results):
+            logger.error("❌ All models failed to load - critical failure")
+            sys.exit(1)
+        else:
+            logger.info(f"✅ {len(successful_models)} models loaded successfully despite {len(failed_models)} failures")
+            sys.exit(0)
     else:
-        logger.info("🎉 All models warmed up successfully! Docker container will have instant startup.")
+        if target_device == 'cuda':
+            logger.info("🚀 All models warmed up successfully with GPU acceleration! Container will have instant startup.")
+        else:
+            logger.info("💻 All models warmed up successfully with CPU optimization! Container will have instant startup.")
         sys.exit(0)
 
 if __name__ == "__main__":
