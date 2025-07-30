@@ -20,6 +20,7 @@ if sys.platform.startswith('win'):
             pass
 
 import streamlit as st
+from streamlit_extras.stylable_container import stylable_container
 import os
 import tempfile
 import time
@@ -64,89 +65,384 @@ os.environ['STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION'] = 'false'  # Disable XSRF 
 os.environ['STREAMLIT_CLIENT_TOOLBAR_MODE'] = 'minimal'  # Reduce UI overhead
 os.environ['STREAMLIT_SERVER_FILE_WATCHER_TYPE'] = 'none'  # Reduce file system monitoring
 
-# Custom CSS for better styling
-st.markdown("""
-<style>
-    .main-header {
-            font-size: 2.5rem;
-        color: #1f77b4;
-        text-align: center;
-        margin-bottom: 2rem;
+# Production Glassmorphism CSS - Complete System from Prototype
+def load_glassmorphism_css():
+    st.markdown("""
+    <style>
+    /* TRUE GLASSMORPHISM v9.0 - COMPLETE REDESIGN */
+    /* Import elegant fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+    
+    /* VIBRANT GLASSMORPHIC BACKGROUND - Essential for glass effect */
+    .stApp {
+        background: 
+            radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+            radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.2) 0%, transparent 50%),
+            linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%) !important;
+        font-family: 'Inter', sans-serif !important;
+        min-height: 100vh !important;
     }
     
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 0.5rem 0;
+    /* Enhanced glassmorphic base styles */
+    * {
+        font-family: 'Inter', sans-serif !important;
     }
     
-    .source-card {
-        background-color: #ffffff;
-        border: 1px solid #e0e0e0;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    /* QUERY INPUT FIELD ENHANCEMENT - High contrast for 2560x1440 displays */
+    .stTextInput > div > div > input {
+        background: rgba(0, 0, 0, 0.45) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        border-radius: 12px !important;
+        color: #ffffff !important;
+        font-size: 1rem !important;
+        padding: 0.75rem 1rem !important;
+        box-shadow: 
+            0 4px 16px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+        transition: all 0.3s ease !important;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9) !important;
     }
     
-    .confidence-high { color: #28a745; }
-    .confidence-medium { color: #ffc107; }
-    .confidence-low { color: #dc3545; }
-    .success-message {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        color: #155724;
-        padding: 0.75rem;
-        border-radius: 0.375rem;
-        margin: 1rem 0;
+    .stTextInput > div > div > input:focus {
+        background: rgba(0, 0, 0, 0.55) !important;
+        border-color: #64b5f6 !important;
+        box-shadow: 
+            0 0 0 2px rgba(100, 181, 246, 0.4), 
+            0 6px 20px rgba(0, 0, 0, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+        color: #ffffff !important;
+        transform: translateY(-1px) !important;
+        outline: none !important;
     }
     
-    .warning-message {
-        background-color: #fff3cd;
-        border: 1px solid #ffeaa7;
-        color: #856404;
-        padding: 0.75rem;
-        border-radius: 0.375rem;
-        margin: 1rem 0;
+    .stTextInput > div > div > input::placeholder {
+        color: rgba(255, 255, 255, 0.8) !important;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7) !important;
     }
     
-    .chat-message {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 0.5rem 0;
+    /* Ensure text input labels are visible */
+    .stTextInput > label {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-weight: 500 !important;
+        margin-bottom: 0.5rem !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
     }
     
-    .user-message {
-        background-color: #e3f2fd;
-        border-left: 4px solid #2196f3;
+    /* Main content area styling */
+    .main .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 2rem !important;
+        max-width: none !important;
     }
     
-    .assistant-message {
-        background-color: #f3e5f5;
-        border-left: 4px solid #9c27b0;
+    /* Enhanced Glass container base class - 2025 Design */
+    .glass-container {
+        background: rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border-radius: 18px !important;
+        border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        box-shadow: 
+            0 8px 32px rgba(0, 0, 0, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+        padding: 0.75rem !important;
+        margin: 0.4rem 0 !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        position: relative !important;
     }
     
+    .glass-container::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        border-radius: 18px !important;
+        padding: 1px !important;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05)) !important;
+        mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
+        mask-composite: exclude !important;
+        -webkit-mask-composite: xor !important;
+        pointer-events: none !important;
+    }
+    
+    .glass-container:hover {
+        background: rgba(255, 255, 255, 0.12) !important;
+        transform: translateY(-2px) scale(1.02) !important;
+        box-shadow: 
+            0 16px 48px rgba(0, 0, 0, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+        border-color: rgba(255, 255, 255, 0.25) !important;
+    }
+    
+    /* Glass header styling */
+    .glass-header {
+        background: rgba(255, 255, 255, 0.12) !important;
+        backdrop-filter: blur(20px) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255, 255, 255, 0.25) !important;
+        padding: 1rem 1.5rem !important;
+        margin-bottom: 1rem !important;
+        text-align: center !important;
+    }
+    
+    .glass-header h1 {
+        color: #ffffff !important;
+        font-size: 2.2rem !important;
+        font-weight: 600 !important;
+        margin: 0 !important;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
+    }
+    
+    .glass-header p {
+        color: rgba(255, 255, 255, 0.8) !important;
+        font-size: 1rem !important;
+        margin: 0.5rem 0 0 0 !important;
+        font-weight: 300 !important;
+    }
+    
+    /* Sidebar styling */
+    .css-1d391kg {
+        background: rgba(0, 0, 0, 0.4) !important;
+        backdrop-filter: blur(15px) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+    
+    /* Sidebar content styling */
+    .css-1d391kg .stMarkdown,
+    .css-1d391kg .stButton,
+    .css-1d391kg h1,
+    .css-1d391kg h2,
+    .css-1d391kg h3,
+    .css-1d391kg h4 {
+        color: #ffffff !important;
+    }
+    
+    /* Sidebar button styling */
+    .css-1d391kg .stButton > button {
+        background: rgba(100, 181, 246, 0.2) !important;
+        border: 1px solid rgba(100, 181, 246, 0.4) !important;
+        color: #64b5f6 !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    /* Sidebar text elements */
+    .css-1d391kg p,
+    .css-1d391kg span,
+    .css-1d391kg div {
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+    
+    /* Sidebar specific overrides */
+    [data-testid="stSidebar"] {
+        background: rgba(0, 0, 0, 0.4) !important;
+        backdrop-filter: blur(15px) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+    
+    [data-testid="stSidebar"] * {
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+    
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] h4 {
+        color: #ffffff !important;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button {
+        background: rgba(100, 181, 246, 0.2) !important;
+        border: 1px solid rgba(100, 181, 246, 0.4) !important;
+        color: #64b5f6 !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: rgba(100, 181, 246, 0.3) !important;
+        border-color: rgba(100, 181, 246, 0.6) !important;
+        color: #ffffff !important;
+    }
+    
+    /* Text styling improvements */
+    h1, h2, h3, h4, h5, h6 {
+        color: #ffffff !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+    
+    p, div, span, label {
+        color: rgba(255, 255, 255, 0.85) !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+    
+    /* Chat bubble styling */
+    .chat-bubble {
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(12px) !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        padding: 0.75rem 1rem !important;
+        margin: 0.5rem 0 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .chat-bubble:hover {
+        background: rgba(255, 255, 255, 0.15) !important;
+        border-color: rgba(100, 181, 246, 0.4) !important;
+    }
+    
+    .chat-query {
+        color: #81c784 !important;
+        font-weight: 500 !important;
+        font-size: 0.95rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .chat-answer {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-size: 0.9rem !important;
+        line-height: 1.5 !important;
+        margin-bottom: 0.75rem !important;
+    }
+    
+    .chat-meta {
+        color: rgba(255, 255, 255, 0.6) !important;
+        font-size: 0.75rem !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+    }
+    
+    /* Button styling */
+    .stButton > button {
+        background: rgba(100, 181, 246, 0.2) !important;
+        border: 1px solid rgba(100, 181, 246, 0.3) !important;
+        border-radius: 12px !important;
+        color: #64b5f6 !important;
+        font-weight: 500 !important;
+        backdrop-filter: blur(10px) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stButton > button:hover {
+        background: rgba(100, 181, 246, 0.3) !important;
+        border-color: rgba(100, 181, 246, 0.5) !important;
+        transform: translateY(-2px) !important;
+        color: #ffffff !important;
+    }
+    
+    /* Success/Warning/Error message styling for glassmorphism */
     .source-selected {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        color: #155724;
-        padding: 0.75rem;
-        border-radius: 0.375rem;
-        margin: 1rem 0;
+        background: rgba(129, 199, 132, 0.15) !important;
+        border: 1px solid rgba(129, 199, 132, 0.3) !important;
+        color: #81c784 !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 12px !important;
+        padding: 0.75rem !important;
+        margin: 1rem 0 !important;
     }
     
     .rejected-sources {
-        background-color: #fff3cd;
-        border: 1px solid #ffeaa7;
-        color: #856404;
-        padding: 0.5rem;
-        border-radius: 0.375rem;
-        margin: 0.5rem 0;
-        font-size: 0.9rem;
+        background: rgba(255, 183, 77, 0.15) !important;
+        border: 1px solid rgba(255, 183, 77, 0.3) !important;
+        color: #ffb74d !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 12px !important;
+        padding: 0.5rem !important;
+        margin: 0.5rem 0 !important;
+        font-size: 0.9rem !important;
     }
-</style>
-""", unsafe_allow_html=True)
+    
+    /* Hide Streamlit branding but keep native sidebar toggle functional */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* HIDE sidebar toggle completely for fixed layout */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    button[data-testid="collapsedControl"],
+    button[data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    
+    /* Hide the button container entirely */
+    .css-1y4p8pa,
+    .css-1vencpc {
+        display: none !important;
+    }
+    
+    /* Comprehensive white box removal and background override */
+    .element-container {
+        margin: 0 !important;
+        background: transparent !important;
+    }
+    
+    /* Ensure no white backgrounds appear */
+    .stApp > div {
+        background: transparent !important;
+    }
+    
+    /* Remove extra spacing and white containers */
+    .block-container > div {
+        gap: 0.5rem !important;
+        background: transparent !important;
+    }
+    
+    /* NUCLEAR APPROACH - FORCE EVERY POSSIBLE ELEMENT TO BE TRANSPARENT */
+    /* Maximum specificity override for EVERYTHING in sidebar */
+    html body div[data-testid="stSidebar"] * {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    html body div[data-testid="stSidebar"] div {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    html body div[data-testid="stSidebar"] .stMarkdown {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    html body div[data-testid="stSidebar"] .stMarkdown div {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    html body div[data-testid="stSidebar"] .element-container {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    /* FORCE specific white box areas */
+    html body div[data-testid="stSidebar"] [style*="background"] {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
+    /* Exception: Keep only our glass elements */
+    html body div[data-testid="stSidebar"] .status-card {
+        background: rgba(255, 255, 255, 0.06) !important;
+        backdrop-filter: blur(16px) saturate(160%) !important;
+    }
+    
+    html body div[data-testid="stSidebar"] .token-counter {
+        background: rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    </style>
+    """, unsafe_allow_html=True)
+
+# Load glassmorphism CSS
+load_glassmorphism_css()
 
 # Proven Multi-Source RAG Architecture Components
 class TokenCounter:
@@ -1119,9 +1415,13 @@ def clear_all_data():
 
 
 def main():
-    # Header
-    st.markdown('<h1 class="main-header">🤖 Smart Document Assistant</h1>', unsafe_allow_html=True)
-    st.markdown("**Multi-source search with intelligent re-ranking** - Text + Visual + Salesforce")
+    # Glassmorphic Header
+    st.markdown("""
+    <div class="glass-header">
+        <h1>🤖 Smart Document Assistant</h1>
+        <p>Multi-source search with intelligent re-ranking - Text + Visual + Salesforce</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # System Architecture Info
     with st.expander("🎯 Multi-Source Architecture", expanded=False):
@@ -1151,88 +1451,216 @@ def main():
     with st.sidebar:
         st.header("🎛️ System Configuration")
         
-        # Hardware detection and system info
-        import torch
-        gpu_available = torch.cuda.is_available()
         
-        if gpu_available:
-            st.info("""
-            🔄 **Multi-Source Architecture (GPU Mode)**
-            • Text RAG: Traditional embeddings ⚡
-            • ColPali: Visual document understanding (FAST ⚡)
-            • Salesforce: Knowledge base search ⚡
-            • BGE Re-ranker: Cross-encoder selection ⚡
-            """)
-        else:
-            st.warning("""
-            🔄 **Multi-Source Architecture (CPU Mode)**
-            • Text RAG: Traditional embeddings ⚡
-            • ColPali: Visual understanding (slower on CPU) 🐌
-            • Salesforce: Knowledge base search ⚡
-            • BGE Re-ranker: Cross-encoder selection ⚡
+        # Feature Status with Glassmorphic Cards
+        with stylable_container(
+            key="feature_status_panel",
+            css_styles="""
+            {
+                background: rgba(255, 255, 255, 0.06);
+                backdrop-filter: blur(20px) saturate(180%);
+                -webkit-backdrop-filter: blur(20px) saturate(180%);
+                border: 1px solid rgba(100, 181, 246, 0.2);
+                border-radius: 18px;
+                padding: 1.5rem;
+                margin-bottom: 1.5rem;
+                box-shadow: 
+                    0 12px 40px rgba(100, 181, 246, 0.1),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            }
+            """
+        ):
+            st.markdown('<h4 style="color: #64b5f6; font-size: 1rem; margin-bottom: 1rem; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">📋 Feature Status</h4>', unsafe_allow_html=True)
             
-            ⚠️ ColPali performance optimized for GPU deployment
-            """)
-        
-        st.divider()
-        
-        # Feature Status Indicators
-        st.subheader("📋 Feature Status")
-        
-        if st.session_state.components_initialized:
-            # Get system capabilities
-            capabilities = st.session_state.orchestrator.get_system_capabilities()
-            
-            # Display status for each feature
-            for feature_name, feature_info in capabilities.items():
+            if st.session_state.components_initialized:
+                # Get system capabilities
+                capabilities = st.session_state.orchestrator.get_system_capabilities()
+                
+                # Create status cards mapping
+                status_cards = []
                 feature_labels = {
-                    'text_rag': '📝 Text RAG',
-                    'visual_rag': '🖼️ Visual RAG (ColPali)',
-                    'salesforce': '🏢 Salesforce',
-                    'reranker': '🎯 Re-ranker'
+                    'text_rag': ('Text RAG', '📝'),
+                    'visual_rag': ('ColPali', '🖼️'), 
+                    'salesforce': ('Salesforce', '🏢'),
+                    'reranker': ('Re-ranker', '🎯')
                 }
                 
-                label = feature_labels.get(feature_name, feature_name.title())
-                status = feature_info['status']
+                for feature_name, feature_info in capabilities.items():
+                    if feature_name in feature_labels:
+                        label, icon = feature_labels[feature_name]
+                        status = feature_info['status']
+                        
+                        if '✅' in status:
+                            # Ready status
+                            value = "✅ Ready"
+                            color = "#81c784"
+                            bg_color = "rgba(129, 199, 132, 0.1)"
+                            border_color = "rgba(129, 199, 132, 0.2)"
+                        elif '⚠️' in status:
+                            # Warning status  
+                            value = "⚠️ Config"
+                            color = "#ffb74d"
+                            bg_color = "rgba(255, 183, 77, 0.1)"
+                            border_color = "rgba(255, 183, 77, 0.2)"
+                        else:
+                            # Error status
+                            value = "❌ Error"
+                            color = "#ef5350"
+                            bg_color = "rgba(239, 83, 80, 0.1)"
+                            border_color = "rgba(239, 83, 80, 0.2)"
+                        
+                        status_cards.append((label, value, color, bg_color, border_color))
                 
-                if '✅' in status:
-                    st.success(f"{label}: {status}")
-                elif '⚠️' in status:
-                    st.warning(f"{label}: {status}")
-                    # Special handling for visual RAG poppler issues
-                    if feature_name == 'visual_rag' and not feature_info.get('poppler_available', False):
-                        st.caption("💡 Install poppler-utils for visual document processing")
-                else:
-                    st.error(f"{label}: {status}")
-        else:
-            st.info("🔄 Feature status will show after initialization")
+                # Display glassmorphic status cards with perfect centering
+                for label, value, color, bg_color, border_color in status_cards:
+                    status_card_html = f"""
+                    <div style="
+                        background: {bg_color};
+                        backdrop-filter: blur(15px);
+                        border: 1px solid {border_color};
+                        border-radius: 12px;
+                        margin-bottom: 0.5rem;
+                        text-align: center;
+                        height: 60px;
+                        position: relative;
+                        transition: all 0.3s ease;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        align-items: center;
+                    ">
+                        <div style="
+                            color: rgba(255,255,255,0.7); 
+                            font-size: 0.75rem; 
+                            text-transform: uppercase; 
+                            line-height: 1;
+                            margin-bottom: 4px;
+                        ">{label}</div>
+                        <div style="
+                            color: {color}; 
+                            font-weight: 600; 
+                            font-size: 1rem;
+                            line-height: 1;
+                        ">{value}</div>
+                    </div>
+                    """
+                    st.markdown(status_card_html, unsafe_allow_html=True)
+            else:
+                # Loading state card
+                loading_card_html = """
+                <div style="
+                    background: rgba(100, 181, 246, 0.1);
+                    backdrop-filter: blur(15px);
+                    border: 1px solid rgba(100, 181, 246, 0.2);
+                    border-radius: 12px;
+                    margin-bottom: 0.5rem;
+                    text-align: center;
+                    height: 60px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                ">
+                    <div style="
+                        color: rgba(255,255,255,0.7); 
+                        font-size: 0.75rem; 
+                        text-transform: uppercase; 
+                        line-height: 1;
+                        margin-bottom: 4px;
+                    ">Systems</div>
+                    <div style="
+                        color: #64b5f6; 
+                        font-weight: 600; 
+                        font-size: 1rem;
+                        line-height: 1;
+                    ">🔄 Loading</div>
+                </div>
+                """
+                st.markdown(loading_card_html, unsafe_allow_html=True)
         
         st.divider()
         
-        # Auto-initialization status (no manual button needed)
-        if st.session_state.components_initialized:
-            st.success("✅ **AI Systems Ready**")
-            st.caption("All models loaded and operational")
-        else:
-            st.info("🚀 **AI Systems**")
-            st.caption("Will auto-load on first use")
+        # System Status Glass Panel
+        with stylable_container(
+            key="system_status_panel",
+            css_styles="""
+            {
+                background: rgba(255, 255, 255, 0.04);
+                backdrop-filter: blur(22px) saturate(170%);
+                -webkit-backdrop-filter: blur(22px) saturate(170%);
+                border: 1px solid rgba(255, 183, 77, 0.15);
+                border-radius: 16px;
+                padding: 1.5rem 1rem;
+                margin-bottom: 1.5rem;
+                box-shadow: 
+                    0 10px 35px rgba(255, 183, 77, 0.1),
+                    inset 0 1px 0 rgba(255, 183, 77, 0.1);
+            }
+            """
+        ):
+            st.markdown('<h4 style="color: #ffb74d; font-size: 1rem; margin-bottom: 1rem; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">📊 System Status</h4>', unsafe_allow_html=True)
+            
+            if st.session_state.components_initialized:
+                st.markdown("""
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Mode:</span>
+                    <span style="color: #64b5f6; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">GPU</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Sources:</span>
+                    <span style="color: #64b5f6; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">3 Active</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Status:</span>
+                    <span style="color: #81c784; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">Ready</span>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Systems:</span>
+                    <span style="color: #64b5f6; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">Loading</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Status:</span>
+                    <span style="color: #ffb74d; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">Initializing</span>
+                </div>
+                """, unsafe_allow_html=True)
     
     # Main content area
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.header("💬 Query Interface")
-        
-        # Query form
-        with st.form(f"query_form_{st.session_state.query_input_key}"):
-            user_query = st.text_input(
-                "**Ask a question:**",
-                placeholder="e.g., What is the cancellation policy?",
-                help="This will search all sources and select the most relevant one",
-                key=f"query_input_{st.session_state.query_input_key}"
-            )
+        # Query Interface Glass Panel
+        with stylable_container(
+            key="query_interface_panel",
+            css_styles="""
+            {
+                background: rgba(255, 255, 255, 0.06);
+                backdrop-filter: blur(20px) saturate(180%);
+                -webkit-backdrop-filter: blur(20px) saturate(180%);
+                border: 1px solid rgba(100, 181, 246, 0.2);
+                border-radius: 18px;
+                padding: 1.5rem;
+                margin-bottom: 1.5rem;
+                box-shadow: 
+                    0 12px 40px rgba(100, 181, 246, 0.1),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            }
+            """
+        ):
+            st.markdown('<h3 style="color: #64b5f6; margin-bottom: 1.5rem; font-size: 1.2rem; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.3);">💬 Query Interface</h3>', unsafe_allow_html=True)
             
-            submitted = st.form_submit_button("🔍 Search All Sources", type="primary")
+            # Query form
+            with st.form(f"query_form_{st.session_state.query_input_key}"):
+                user_query = st.text_input(
+                    "**Ask a question:**",
+                    placeholder="e.g., What is the cancellation policy?",
+                    help="This will search all sources and select the most relevant one",
+                    key=f"query_input_{st.session_state.query_input_key}"
+                )
+                
+                submitted = st.form_submit_button("🔍 Search All Sources", type="primary")
         
         # Process query
         if submitted and user_query.strip():
@@ -1262,14 +1690,50 @@ def main():
                 if not st.session_state.get('file_upload_in_progress', False):
                     st.rerun()
         
-        # Display recent results
+        # Recent Results Glass Panel
         if st.session_state.chat_history:
-            st.header("📝 Recent Results")
+            with stylable_container(
+                key="results_header_panel",
+                css_styles="""
+                {
+                    background: rgba(255, 255, 255, 0.04);
+                    backdrop-filter: blur(18px) saturate(160%);
+                    -webkit-backdrop-filter: blur(18px) saturate(160%);
+                    border: 1px solid rgba(100, 181, 246, 0.15);
+                    border-radius: 16px;
+                    padding: 1rem 1.5rem;
+                    margin-bottom: 1.5rem;
+                    box-shadow: 
+                        0 8px 30px rgba(100, 181, 246, 0.08),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+                }
+                """
+            ):
+                st.markdown('<h3 style="color: #64b5f6; margin: 0; font-size: 1.2rem; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.3);">📝 Recent Results</h3>', unsafe_allow_html=True)
             
-            # Show last 3 results
+            # Show last 3 results as glassmorphic chat bubbles
             for i, chat in enumerate(reversed(st.session_state.chat_history[-3:])):
-                with st.container():
-                    st.markdown(f"**🧑 Query:** {chat['query']}")
+                # Create individual glassmorphic chat bubble
+                with stylable_container(
+                    key=f"chat_bubble_{i}",
+                    css_styles="""
+                    {
+                        background: rgba(255, 255, 255, 0.05);
+                        backdrop-filter: blur(15px) saturate(150%);
+                        -webkit-backdrop-filter: blur(15px) saturate(150%);
+                        border: 1px solid rgba(255, 255, 255, 0.12);
+                        border-radius: 16px;
+                        padding: 1.5rem;
+                        margin-bottom: 1rem;
+                        box-shadow: 
+                            0 6px 25px rgba(0, 0, 0, 0.1),
+                            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+                        transition: all 0.3s ease;
+                    }
+                    """
+                ):
+                    # Query
+                    st.markdown(f'<div style="color: #81c784; font-weight: 500; font-size: 0.95rem; margin-bottom: 0.75rem; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">🔍 {chat["query"]}</div>', unsafe_allow_html=True)
                     
                     result = chat['result']
                     if result['success']:
@@ -1283,89 +1747,63 @@ def main():
                         """, unsafe_allow_html=True)
                         
                         # Answer
-                        st.markdown(f"**🤖 Answer:**")
-                        st.markdown(result['answer'])
+                        st.markdown(f'<div style="color: rgba(255, 255, 255, 0.9); font-size: 0.9rem; line-height: 1.6; margin-bottom: 1rem;">{result["answer"]}</div>', unsafe_allow_html=True)
                         
-                        # Token breakdown - compact and elegant design
+                        # Perfect Token Counter with line-height centering
                         if 'token_breakdown' in result:
                             tokens = result['token_breakdown']
                             
-                            # Custom CSS for compact token display
-                            st.markdown("""
-                            <style>
-                            .token-container {
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                background-color: #f8f9fa;
-                                border-radius: 8px;
-                                padding: 12px 16px;
-                                margin: 8px 0;
-                                border-left: 4px solid #1f77b4;
-                            }
-                            .token-item {
-                                text-align: center;
-                                flex: 1;
-                                padding: 0 8px;
-                            }
-                            .token-label {
-                                font-size: 11px;
-                                font-weight: 500;
-                                color: #666;
-                                margin-bottom: 2px;
-                                text-transform: uppercase;
-                                letter-spacing: 0.5px;
-                            }
-                            .token-value {
-                                font-size: 16px;
-                                font-weight: 600;
-                                color: #1f77b4;
-                                margin: 0;
-                            }
-                            .token-total {
-                                border-left: 1px solid #ddd;
-                                padding-left: 12px !important;
-                            }
-                            .token-total .token-value {
-                                color: #2e7d2e;
-                                font-size: 18px;
-                            }
-                            </style>
-                            """, unsafe_allow_html=True)
-                            
-                            # Compact token display with 7 columns including TEXT RAG
-                            st.markdown(f"""
-                            <div class="token-container">
-                                <div class="token-item">
-                                    <div class="token-label">Query</div>
-                                    <div class="token-value">{tokens['query_tokens']}</div>
+                            with stylable_container(
+                                key=f"token_counter_{i}",
+                                css_styles="""
+                                {
+                                    background: rgba(255, 255, 255, 0.08);
+                                    backdrop-filter: blur(12px);
+                                    -webkit-backdrop-filter: blur(12px);
+                                    border: 1px solid rgba(255, 255, 255, 0.15);
+                                    border-radius: 12px;
+                                    margin: 1rem 0;
+                                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+                                    overflow: hidden;
+                                }
+                                """
+                            ):
+                                # Perfect Token Counter - Line-height based centering
+                                perfect_token_counter = f"""
+                                <div style="padding: 8px 12px; margin: 8px 0 4px 0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; height: 40px;">
+                                        <div style="text-align: center; flex: 1;">
+                                            <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Query</div>
+                                            <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['query_tokens']}</div>
+                                        </div>
+                                        <div style="text-align: center; flex: 1;">
+                                            <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Text RAG</div>
+                                            <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['text_rag_tokens']}</div>
+                                        </div>
+                                        <div style="text-align: center; flex: 1;">
+                                            <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">VLM</div>
+                                            <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['vlm_analysis_tokens']}</div>
+                                        </div>
+                                        <div style="text-align: center; flex: 1;">
+                                            <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">SF</div>
+                                            <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['salesforce_api_tokens']}</div>
+                                        </div>
+                                        <div style="text-align: center; flex: 1;">
+                                            <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Re-rank</div>
+                                            <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['reranker_tokens']}</div>
+                                        </div>
+                                        <div style="text-align: center; flex: 1;">
+                                            <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Response</div>
+                                            <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['response_tokens']}</div>
+                                        </div>
+                                        <div style="text-align: center; flex: 1; border-left: 1px solid rgba(255, 255, 255, 0.2); padding-left: 8px;">
+                                            <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Total</div>
+                                            <div style="color: #81c784; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['total_tokens']}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="token-item">
-                                    <div class="token-label">Text RAG</div>
-                                    <div class="token-value">{tokens['text_rag_tokens']}</div>
-                                </div>
-                                <div class="token-item">
-                                    <div class="token-label">VLM</div>
-                                    <div class="token-value">{tokens['vlm_analysis_tokens']}</div>
-                                </div>
-                                <div class="token-item">
-                                    <div class="token-label">Salesforce</div>
-                                    <div class="token-value">{tokens['salesforce_api_tokens']}</div>
-                                </div>
-                                <div class="token-item">
-                                    <div class="token-label">Re-rank</div>
-                                    <div class="token-value">{tokens['reranker_tokens']}</div>
-                                </div>
-                                <div class="token-item">
-                                    <div class="token-label">Response</div>
-                                    <div class="token-value">{tokens['response_tokens']}</div>
-                                </div>
-                                <div class="token-item token-total">
-                                    <div class="token-label">Total</div>
-                                    <div class="token-value">{tokens['total_tokens']}</div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                                """
+                                st.markdown(perfect_token_counter, unsafe_allow_html=True)
                         
                         # Rejected sources (transparency)
                         if result.get('rejected_sources'):
@@ -1379,49 +1817,64 @@ def main():
                     else:
                         st.error(f"❌ {result['error']}")
                     
-                    st.caption(f"Multi-source | Time: {chat['processing_time']:.2f}s | {chat['timestamp'].strftime('%H:%M:%S')}")
-                    st.divider()
+                    # Source and timestamp
+                    st.markdown(f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.75rem; text-align: center; margin-top: 0.75rem;">Multi-source | Time: {chat["processing_time"]:.2f}s | {chat["timestamp"].strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
     
     with col2:
-        st.header("📁 Document Management")
-        
-        # Hardware-specific tips
-        import torch
-        if not torch.cuda.is_available():
-            st.info("""
-            💡 **CPU Processing Tips**:
-            • ColPali will be slower but functional
-            • Text processing remains fast
-            • Multi-source search still works
-            • GPU deployment recommended for production
-            """)
-        
-        # File upload and processing section with proper form handling
-        st.subheader("📤 Document Upload")
-        
-        # File upload with stable key and robust error handling
-        try:
-            uploaded_files = st.file_uploader(
-                "Upload documents",
-                accept_multiple_files=True,
-                type=['pdf', 'txt', 'docx', 'doc', 'xlsx', 'xls', 'csv'],
-                help="Upload documents for multi-source processing (max 200MB per file)",
-                key="main_file_uploader"  # Static key prevents AxiosError 400
-            )
+        # Document Management Glass Panel
+        with stylable_container(
+            key="document_management_panel",
+            css_styles="""
+            {
+                background: rgba(255, 255, 255, 0.06);
+                backdrop-filter: blur(20px) saturate(180%);
+                -webkit-backdrop-filter: blur(20px) saturate(180%);
+                border: 1px solid rgba(100, 181, 246, 0.2);
+                border-radius: 18px;
+                padding: 1.5rem;
+                margin-bottom: 1.5rem;
+                box-shadow: 
+                    0 12px 40px rgba(100, 181, 246, 0.1),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            }
+            """
+        ):
+            st.markdown('<h3 style="color: #64b5f6; margin-bottom: 1.5rem; font-size: 1.2rem; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.3);">📁 Document Management</h3>', unsafe_allow_html=True)
             
-            # If upload fails, show helpful troubleshooting info
-            if uploaded_files is None and 'upload_error_shown' not in st.session_state:
-                st.info("💡 **Upload Tips**: If you encounter errors, try refreshing the page or uploading one file at a time.")
+            
+            # Add glassmorphic file upload area styling
+            st.markdown("""
+            <div style="background: rgba(255, 255, 255, 0.05); border: 2px dashed rgba(100, 181, 246, 0.3); border-radius: 12px; padding: 2rem 1rem; text-align: center; margin: 1rem 0;">
+                <div style="color: #64b5f6; font-size: 2rem; margin-bottom: 0.5rem;">📤</div>
+                <div style="color: rgba(255, 255, 255, 0.8); font-size: 0.9rem;">Drop files here or use uploader below</div>
+                <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.75rem; margin-top: 0.5rem;">PDF, DOCX, TXT, CSV supported</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Functional File Upload with glassmorphic styling
+            try:
+                uploaded_files = st.file_uploader(
+                    "📤 Upload Documents",
+                    accept_multiple_files=True,
+                    type=['pdf', 'txt', 'docx', 'doc', 'xlsx', 'xls', 'csv'],
+                    help="Upload documents for multi-source processing (PDF, DOCX, TXT, CSV supported)",
+                    key="main_file_uploader",  # Static key prevents AxiosError 400
+                    label_visibility="collapsed"  # Hide the label since we have the custom area above
+                )
                 
-        except Exception as e:
-            st.error(f"❌ File upload error: {str(e)}")
-            st.error("🔧 **Troubleshooting**: This might be a browser/network issue. Try:")
-            st.error("   • Refresh the page and try again")
-            st.error("   • Upload files one at a time") 
-            st.error("   • Check your internet connection")
-            st.error("   • Try a smaller file first")
-            st.session_state.upload_error_shown = True
-            uploaded_files = None
+                # If upload fails, show helpful troubleshooting info
+                if uploaded_files is None and 'upload_error_shown' not in st.session_state:
+                    st.info("💡 **Upload Tips**: If you encounter errors, try refreshing the page or uploading one file at a time.")
+                    
+            except Exception as e:
+                st.error(f"❌ File upload error: {str(e)}")
+                st.error("🔧 **Troubleshooting**: This might be a browser/network issue. Try:")
+                st.error("   • Refresh the page and try again")
+                st.error("   • Upload files one at a time") 
+                st.error("   • Check your internet connection")
+                st.error("   • Try a smaller file first")
+                st.session_state.upload_error_shown = True
+                uploaded_files = None
         
         if uploaded_files:
             st.success(f"✅ {len(uploaded_files)} files selected")
@@ -1565,29 +2018,75 @@ def main():
         
         st.divider()
         
-        # System status
-        st.header("📊 System Status")
+        # Processing Status Glass Panel - Matching prototype styling
+        with stylable_container(
+            key="processing_status_panel",
+            css_styles="""
+            {
+                background: rgba(255, 255, 255, 0.04);
+                backdrop-filter: blur(18px) saturate(160%);
+                -webkit-backdrop-filter: blur(18px) saturate(160%);
+                border: 1px solid rgba(100, 181, 246, 0.15);
+                border-radius: 18px;
+                padding: 1.5rem;
+                margin-top: 0rem;
+                margin-bottom: 1.5rem;
+                box-shadow: 
+                    0 8px 30px rgba(100, 181, 246, 0.08),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            }
+            """
+        ):
+            st.markdown('<h3 style="color: #64b5f6; margin-bottom: 1.5rem; font-size: 1.2rem; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.3);">⚡ Processing Status</h3>', unsafe_allow_html=True)
+            
+            # Dynamic status based on hardware
+            import torch
+            gpu_mode = torch.cuda.is_available()
+            
+            # Create glassmorphic status display matching prototype style
+            st.markdown(f"""
+            <div style="margin: 0.5rem 0;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Mode:</span>
+                    <span style="color: #64b5f6; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">{"GPU" if gpu_mode else "CPU"}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Systems:</span>
+                    <span style="color: #81c784; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">{"All Ready" if st.session_state.components_initialized else "Initializing"}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Queries:</span>
+                    <span style="color: #64b5f6; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">{len(st.session_state.chat_history)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">ColPali:</span>
+                    <span style="color: #64b5f6; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">{"Fast ⚡" if gpu_mode else "Functional 🐌"}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Sources:</span>
+                    <span style="color: rgba(255, 255, 255, 0.9); font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">3 Active</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         
-        # Dynamic status based on hardware
-        import torch
-        gpu_mode = torch.cuda.is_available()
-        
-        status_data = {
-            "Mode": "GPU" if gpu_mode else "CPU",
-            "Systems": "All Ready" if st.session_state.components_initialized else "Not initialized",
-            "Queries": len(st.session_state.chat_history),
-            "ColPali": "Fast ⚡" if gpu_mode else "Functional 🐌",
-            "Sources": "Text + ColPali + Salesforce"
-        }
-        
-        for key, value in status_data.items():
-            st.metric(key, value)
-        
-        # Clear button
+        # Clear History Button with glassmorphic styling
         if st.session_state.chat_history:
-            if st.button("🗑️ Clear History", type="secondary"):
-                st.session_state.chat_history = []
-                # Note: Removed st.rerun() to prevent interference with file uploads
+            with stylable_container(
+                key="clear_button",
+                css_styles="""
+                {
+                    background: rgba(244, 67, 54, 0.1);
+                    backdrop-filter: blur(15px);
+                    border: 1px solid rgba(244, 67, 54, 0.2);
+                    border-radius: 12px;
+                    padding: 0.75rem;
+                    transition: all 0.3s ease;
+                }
+                """
+            ):
+                if st.button("🗑️ Clear History", type="secondary", use_container_width=True):
+                    st.session_state.chat_history = []
+                    # Note: Removed st.rerun() to prevent interference with file uploads
 
 
 # Run the app
