@@ -32,12 +32,12 @@ if 'chat_history' not in st.session_state:
             'timestamp': datetime.now(),
             'token_breakdown': {
                 'query_tokens': 8,
-                'text_rag_tokens': 156,
+                'text_rag_tokens': 1856,
                 'vlm_analysis_tokens': 0,
                 'salesforce_api_tokens': 0,
                 'reranker_tokens': 10,
-                'response_tokens': 45,
-                'total_tokens': 219
+                'response_tokens': 445,
+                'total_tokens': 2319
             }
         },
         {
@@ -80,6 +80,51 @@ def load_glassmorphism_css():
     * {
         font-family: 'Inter', sans-serif !important;
     }
+    
+    /* QUERY INPUT FIELD ENHANCEMENT - High contrast for 2560x1440 displays */
+    .stTextInput > div > div > input {
+        background: rgba(0, 0, 0, 0.45) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        border-radius: 12px !important;
+        color: #ffffff !important;
+        font-size: 1rem !important;
+        padding: 0.75rem 1rem !important;
+        box-shadow: 
+            0 4px 16px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+        transition: all 0.3s ease !important;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9) !important;
+    }
+    
+    .stTextInput > div > div > input:focus {
+        background: rgba(0, 0, 0, 0.55) !important;
+        border-color: #64b5f6 !important;
+        box-shadow: 
+            0 0 0 2px rgba(100, 181, 246, 0.4), 
+            0 6px 20px rgba(0, 0, 0, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+        color: #ffffff !important;
+        transform: translateY(-1px) !important;
+        outline: none !important;
+    }
+    
+    .stTextInput > div > div > input::placeholder {
+        color: rgba(255, 255, 255, 0.8) !important;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7) !important;
+    }
+    
+    /* Ensure text input labels are visible */
+    .stTextInput > label {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-weight: 500 !important;
+        margin-bottom: 0.5rem !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+    }
+    
+    /* TOKEN COUNTER - Using working flexbox design from test_glassmorphism_fixed.py */
+    /* No complex CSS needed - using inline styles for reliability */
     
     /* Main content area styling */
     .main .block-container {
@@ -352,39 +397,7 @@ def load_glassmorphism_css():
         font-family: 'Inter', sans-serif !important;
     }
     
-    /* Glassmorphic form elements styling */
-    .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.1) !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        border-radius: 12px !important;
-        color: #ffffff !important;
-        backdrop-filter: blur(15px) !important;
-        -webkit-backdrop-filter: blur(15px) !important;
-        font-size: 1rem !important;
-        padding: 0.75rem 1rem !important;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    .stTextInput > div > div > input:focus {
-        background: rgba(255, 255, 255, 0.15) !important;
-        border-color: #64b5f6 !important;
-        box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.3), 0 6px 20px rgba(0, 0, 0, 0.15) !important;
-        color: #ffffff !important;
-        transform: translateY(-1px) !important;
-        outline: none !important;
-    }
-    
-    .stTextInput > div > div > input::placeholder {
-        color: rgba(255, 255, 255, 0.6) !important;
-    }
-    
-    /* Ensure text input labels are visible */
-    .stTextInput > label {
-        color: rgba(255, 255, 255, 0.9) !important;
-        font-weight: 500 !important;
-        margin-bottom: 0.5rem !important;
-    }
+    /* Duplicate input styling removed - using optimized version above */
     
     /* Button styling */
     .stButton > button {
@@ -579,50 +592,16 @@ def load_glassmorphism_css():
         background-color: transparent !important;
     }
     
-    /* TOKEN COUNTER specific styling to replace inline styles */
+    /* TOKEN COUNTER container styling - Grid system defined above */
     .token-counter {
         background: rgba(255, 255, 255, 0.08) !important;
         backdrop-filter: blur(10px) !important;
         -webkit-backdrop-filter: blur(10px) !important;
-        border-radius: 8px !important;
+        border-radius: 12px !important;
         border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        padding: 10px 14px !important;
-        margin: 10px 0 6px 0 !important;
-    }
-    
-    .token-counter-grid {
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
-        font-size: 12px !important;
-    }
-    
-    .token-counter-item {
-        text-align: center !important;
-        flex: 1 !important;
-    }
-    
-    .token-counter-item.total {
-        border-left: 1px solid rgba(255, 255, 255, 0.2) !important;
-        padding-left: 8px !important;
-    }
-    
-    .token-counter-label {
-        color: rgba(255, 255, 255, 0.6) !important;
-        font-size: 10px !important;
-        text-transform: uppercase !important;
-        margin-bottom: 2px !important;
-    }
-    
-    .token-counter-value {
-        color: #64b5f6 !important;
-        font-weight: 600 !important;
-        font-size: 13px !important;
-    }
-    
-    .token-counter-value.total {
-        color: #81c784 !important;
-        font-size: 14px !important;
+        margin: 1rem 0 !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+        overflow: hidden !important;
     }
     
     /* NUCLEAR APPROACH - FORCE EVERY POSSIBLE ELEMENT TO BE TRANSPARENT */
@@ -765,9 +744,9 @@ def main():
     # Load glassmorphism CSS
     load_glassmorphism_css()
     
-    # Header
+    # Header with proper spacing
     st.markdown("""
-    <div class="glass-header">
+    <div class="glass-header" style="margin-bottom: 2rem;">
         <h1>🤖 Smart Document Assistant</h1>
         <p>Glassmorphism UI Prototype with Collapsible Sidebar</p>
     </div>
@@ -775,7 +754,7 @@ def main():
     
     # TRUE GLASSMORPHIC SIDEBAR - Using stylable_container
     with st.sidebar:
-        # System Configuration Header
+        # System Configuration Header - Aligned with main header
         with stylable_container(
             key="sidebar_header",
             css_styles="""
@@ -786,6 +765,7 @@ def main():
                 border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 16px;
                 padding: 1.5rem 1rem;
+                margin-top: 0rem;
                 margin-bottom: 1.5rem;
                 box-shadow: 
                     0 8px 32px rgba(0, 0, 0, 0.15),
@@ -816,121 +796,39 @@ def main():
         ):
             st.markdown('<h4 style="color: #81c784; font-size: 1rem; margin-bottom: 1rem; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">📋 Feature Status</h4>', unsafe_allow_html=True)
             
-            # Create individual status cards using stylable containers
-            col1, col2 = st.columns(2)
+            # Clean Vertical Status Cards Layout
+            status_cards = [
+                ("Text RAG", "✅ Ready", "#81c784", "rgba(129, 199, 132, 0.1)", "rgba(129, 199, 132, 0.2)"),
+                ("ColPali", "✅ GPU", "#64b5f6", "rgba(100, 181, 246, 0.1)", "rgba(100, 181, 246, 0.2)"),
+                ("Salesforce", "⚠️ Config", "#ffb74d", "rgba(255, 183, 77, 0.1)", "rgba(255, 183, 77, 0.2)"),
+                ("Re-rank", "✅ BGE", "#81c784", "rgba(129, 199, 132, 0.1)", "rgba(129, 199, 132, 0.2)"),
+                ("GPU Mode", "⚡ Fast", "#64b5f6", "rgba(100, 181, 246, 0.1)", "rgba(100, 181, 246, 0.2)"),
+                ("Queries", str(len(st.session_state.chat_history)), "#64b5f6", "rgba(100, 181, 246, 0.1)", "rgba(100, 181, 246, 0.2)")
+            ]
             
-            with col1:
+            for label, value, color, bg_color, border_color in status_cards:
                 with stylable_container(
-                    key="text_rag_status",
-                    css_styles="""
-                    {
-                        background: rgba(129, 199, 132, 0.1);
+                    key=f"status_card_{label.lower().replace(' ', '_').replace('-', '_')}",
+                    css_styles=f"""
+                    {{
+                        background: {bg_color};
                         backdrop-filter: blur(15px);
-                        border: 1px solid rgba(129, 199, 132, 0.2);
+                        border: 1px solid {border_color};
                         border-radius: 12px;
                         padding: 0.75rem;
                         margin-bottom: 0.5rem;
                         text-align: center;
+                        height: 60px;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        align-items: center;
                         transition: all 0.3s ease;
-                    }
-                    {
-                        background: rgba(129, 199, 132, 0.15);
-                        transform: translateY(-2px);
-                        box-shadow: 0 8px 25px rgba(129, 199, 132, 0.2);
-                    }
+                    }}
                     """
                 ):
-                    st.markdown('<div style="color: rgba(255,255,255,0.7); font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem;">Text RAG</div>', unsafe_allow_html=True)
-                    st.markdown('<div style="color: #81c784; font-weight: 600; font-size: 1.1rem;">✅ Ready</div>', unsafe_allow_html=True)
-                
-                with stylable_container(
-                    key="salesforce_status", 
-                    css_styles="""
-                    {
-                        background: rgba(255, 183, 77, 0.1);
-                        backdrop-filter: blur(15px);
-                        border: 1px solid rgba(255, 183, 77, 0.2);
-                        border-radius: 12px;
-                        padding: 0.75rem;
-                        margin-bottom: 0.5rem;
-                        text-align: center;
-                        transition: all 0.3s ease;
-                    }
-                    """
-                ):
-                    st.markdown('<div style="color: rgba(255,255,255,0.7); font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem;">Salesforce</div>', unsafe_allow_html=True)
-                    st.markdown('<div style="color: #ffb74d; font-weight: 600; font-size: 1.1rem;">⚠️ Config</div>', unsafe_allow_html=True)
-                
-                with stylable_container(
-                    key="gpu_mode_status",
-                    css_styles="""
-                    {
-                        background: rgba(100, 181, 246, 0.1);
-                        backdrop-filter: blur(15px);
-                        border: 1px solid rgba(100, 181, 246, 0.2);
-                        border-radius: 12px;
-                        padding: 0.75rem;
-                        text-align: center;
-                        transition: all 0.3s ease;
-                    }
-                    """
-                ):
-                    st.markdown('<div style="color: rgba(255,255,255,0.7); font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem;">GPU Mode</div>', unsafe_allow_html=True)
-                    st.markdown('<div style="color: #64b5f6; font-weight: 600; font-size: 1.1rem;">⚡ Fast</div>', unsafe_allow_html=True)
-            
-            with col2:
-                with stylable_container(
-                    key="colpali_status",
-                    css_styles="""
-                    {
-                        background: rgba(100, 181, 246, 0.1);
-                        backdrop-filter: blur(15px);
-                        border: 1px solid rgba(100, 181, 246, 0.2);
-                        border-radius: 12px;
-                        padding: 0.75rem;
-                        margin-bottom: 0.5rem;
-                        text-align: center;
-                        transition: all 0.3s ease;
-                    }
-                    """
-                ):
-                    st.markdown('<div style="color: rgba(255,255,255,0.7); font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem;">ColPali</div>', unsafe_allow_html=True)
-                    st.markdown('<div style="color: #64b5f6; font-weight: 600; font-size: 1.1rem;">✅ GPU</div>', unsafe_allow_html=True)
-                
-                with stylable_container(
-                    key="reranker_status",
-                    css_styles="""
-                    {
-                        background: rgba(129, 199, 132, 0.1);
-                        backdrop-filter: blur(15px);
-                        border: 1px solid rgba(129, 199, 132, 0.2);
-                        border-radius: 12px;
-                        padding: 0.75rem;
-                        margin-bottom: 0.5rem;
-                        text-align: center;
-                        transition: all 0.3s ease;
-                    }
-                    """
-                ):
-                    st.markdown('<div style="color: rgba(255,255,255,0.7); font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem;">Re-ranker</div>', unsafe_allow_html=True)
-                    st.markdown('<div style="color: #81c784; font-weight: 600; font-size: 1.1rem;">✅ BGE</div>', unsafe_allow_html=True)
-                
-                with stylable_container(
-                    key="queries_status",
-                    css_styles="""
-                    {
-                        background: rgba(100, 181, 246, 0.1);
-                        backdrop-filter: blur(15px);
-                        border: 1px solid rgba(100, 181, 246, 0.2);
-                        border-radius: 12px;
-                        padding: 0.75rem;
-                        text-align: center;
-                        transition: all 0.3s ease;
-                    }
-                    """
-                ):
-                    st.markdown('<div style="color: rgba(255,255,255,0.7); font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem;">Queries</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="color: #64b5f6; font-weight: 600; font-size: 1.1rem;">{len(st.session_state.chat_history)}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="color: rgba(255,255,255,0.7); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem; line-height: 1.2;">{label}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="color: {color}; font-weight: 600; font-size: 1rem;">{value}</div>', unsafe_allow_html=True)
         
         # System Status Glass Panel
         with stylable_container(
@@ -985,11 +883,11 @@ def main():
                 st.session_state.chat_history = []
                 st.rerun()
     
-    # Main content area
+    # Main content area - Aligned with sidebar panels
     col1, col2 = st.columns([2.5, 1.2])
     
     with col1:
-        # Query Interface Glass Panel
+        # Query Interface Glass Panel - Aligned with sidebar
         with stylable_container(
             key="query_interface_panel",
             css_styles="""
@@ -999,8 +897,9 @@ def main():
                 -webkit-backdrop-filter: blur(20px) saturate(180%);
                 border: 1px solid rgba(100, 181, 246, 0.2);
                 border-radius: 18px;
-                padding: 2rem 1.5rem;
-                margin-bottom: 2rem;
+                padding: 1.5rem;
+                margin-top: 0rem;
+                margin-bottom: 1.5rem;
                 box-shadow: 
                     0 12px 40px rgba(100, 181, 246, 0.1),
                     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -1095,7 +994,7 @@ def main():
                     # Answer
                     st.markdown(f'<div style="color: rgba(255, 255, 255, 0.9); font-size: 0.9rem; line-height: 1.6; margin-bottom: 1rem;">{chat["answer"]}</div>', unsafe_allow_html=True)
                     
-                    # Token Counter using stylable_container
+                    # Revolutionary CSS Grid Token Counter - Handles 4-digit values and responsive design
                     with stylable_container(
                         key=f"token_counter_{i}",
                         css_styles="""
@@ -1105,36 +1004,51 @@ def main():
                             -webkit-backdrop-filter: blur(12px);
                             border: 1px solid rgba(255, 255, 255, 0.15);
                             border-radius: 12px;
-                            padding: 1rem;
                             margin: 1rem 0;
                             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+                            overflow: hidden;
                         }
                         """
                     ):
-                        # Create token display grid
-                        token_cols = st.columns(7)
                         tokens = chat['token_breakdown']
                         
-                        with token_cols[0]:
-                            st.markdown('<div style="text-align: center;"><div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem;">Query</div><div style="color: #64b5f6; font-weight: 600; font-size: 0.9rem;">{}</div></div>'.format(tokens['query_tokens']), unsafe_allow_html=True)
+                        # Working Token Counter - Copied from test_glassmorphism_fixed.py
+                        working_token_counter = f"""
+                        <div style="background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(10px); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15); padding: 8px 12px; margin: 8px 0 4px 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Query</div>
+                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['query_tokens']}</div>
+                                </div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Text RAG</div>
+                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['text_rag_tokens']}</div>
+                                </div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">VLM</div>
+                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['vlm_analysis_tokens']}</div>
+                                </div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">SF</div>
+                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['salesforce_api_tokens']}</div>
+                                </div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Re-rank</div>
+                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['reranker_tokens']}</div>
+                                </div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Response</div>
+                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['response_tokens']}</div>
+                                </div>
+                                <div style="text-align: center; flex: 1; border-left: 1px solid rgba(255, 255, 255, 0.2); padding-left: 8px;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 9px; text-transform: uppercase;">Total</div>
+                                    <div style="color: #81c784; font-weight: 600;">{tokens['total_tokens']}</div>
+                                </div>
+                            </div>
+                        </div>
+                        """
                         
-                        with token_cols[1]:
-                            st.markdown('<div style="text-align: center;"><div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem;">Text RAG</div><div style="color: #64b5f6; font-weight: 600; font-size: 0.9rem;">{}</div></div>'.format(tokens['text_rag_tokens']), unsafe_allow_html=True)
-                        
-                        with token_cols[2]:
-                            st.markdown('<div style="text-align: center;"><div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem;">VLM</div><div style="color: #64b5f6; font-weight: 600; font-size: 0.9rem;">{}</div></div>'.format(tokens['vlm_analysis_tokens']), unsafe_allow_html=True)
-                        
-                        with token_cols[3]:
-                            st.markdown('<div style="text-align: center;"><div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem;">SF</div><div style="color: #64b5f6; font-weight: 600; font-size: 0.9rem;">{}</div></div>'.format(tokens['salesforce_api_tokens']), unsafe_allow_html=True)
-                        
-                        with token_cols[4]:
-                            st.markdown('<div style="text-align: center;"><div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem;">Re-rank</div><div style="color: #64b5f6; font-weight: 600; font-size: 0.9rem;">{}</div></div>'.format(tokens['reranker_tokens']), unsafe_allow_html=True)
-                        
-                        with token_cols[5]:
-                            st.markdown('<div style="text-align: center;"><div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem;">Response</div><div style="color: #64b5f6; font-weight: 600; font-size: 0.9rem;">{}</div></div>'.format(tokens['response_tokens']), unsafe_allow_html=True)
-                        
-                        with token_cols[6]:
-                            st.markdown('<div style="text-align: center; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 0.5rem;"><div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; text-transform: uppercase; margin-bottom: 0.25rem;">Total</div><div style="color: #81c784; font-weight: 600; font-size: 1rem;">{}</div></div>'.format(tokens['total_tokens']), unsafe_allow_html=True)
+                        st.markdown(working_token_counter, unsafe_allow_html=True)
                     
                     # Source and timestamp
                     source_icons = {'text': '📝', 'visual': '🖼️', 'salesforce': '🏢'}
@@ -1142,38 +1056,76 @@ def main():
                     st.markdown(f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.75rem; text-align: center; margin-top: 0.75rem;">{icon} {chat["source_type"].upper()} | {chat["timestamp"].strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
     
     with col2:
-        # Document Management Section
-        st.markdown(create_glass_container("""
-            <h3 style="color: #64b5f6; margin-bottom: 1rem;">📁 Document Management</h3>
+        # Document Management Glass Panel - Aligned with Query Interface
+        with stylable_container(
+            key="document_management_panel",
+            css_styles="""
+            {
+                background: rgba(255, 255, 255, 0.06);
+                backdrop-filter: blur(20px) saturate(180%);
+                -webkit-backdrop-filter: blur(20px) saturate(180%);
+                border: 1px solid rgba(100, 181, 246, 0.2);
+                border-radius: 18px;
+                padding: 1.5rem;
+                margin-top: 0rem;
+                margin-bottom: 1.5rem;
+                box-shadow: 
+                    0 12px 40px rgba(100, 181, 246, 0.1),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            }
+            """
+        ):
+            st.markdown('<h3 style="color: #64b5f6; margin-bottom: 1.5rem; font-size: 1.2rem; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.3);">📁 Document Management</h3>', unsafe_allow_html=True)
+            
+            st.markdown("""
             <div style="background: rgba(255, 255, 255, 0.05); border: 2px dashed rgba(100, 181, 246, 0.3); border-radius: 12px; padding: 2rem 1rem; text-align: center; margin: 1rem 0;">
                 <div style="color: #64b5f6; font-size: 2rem; margin-bottom: 0.5rem;">📤</div>
                 <div style="color: rgba(255, 255, 255, 0.8); font-size: 0.9rem;">Drop files here or click to upload</div>
                 <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.75rem; margin-top: 0.5rem;">PDF, DOCX, TXT, CSV supported</div>
             </div>
-        """), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
         
-        # Processing Status
-        st.markdown(create_glass_container("""
-            <h4 style="color: #64b5f6; margin-bottom: 1rem;">⚡ Processing Status</h4>
+        # Processing Status Glass Panel - Aligned with Query Interface
+        with stylable_container(
+            key="processing_status_panel",
+            css_styles="""
+            {
+                background: rgba(255, 255, 255, 0.04);
+                backdrop-filter: blur(18px) saturate(160%);
+                -webkit-backdrop-filter: blur(18px) saturate(160%);
+                border: 1px solid rgba(100, 181, 246, 0.15);
+                border-radius: 18px;
+                padding: 1.5rem;
+                margin-top: 0rem;
+                margin-bottom: 1.5rem;
+                box-shadow: 
+                    0 8px 30px rgba(100, 181, 246, 0.08),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            }
+            """
+        ):
+            st.markdown('<h3 style="color: #64b5f6; margin-bottom: 1.5rem; font-size: 1.2rem; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.3);">⚡ Processing Status</h3>', unsafe_allow_html=True)
+            
+            st.markdown("""
             <div style="margin: 0.5rem 0;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                    <span style="color: rgba(255, 255, 255, 0.7); font-size: 0.8rem;">Documents:</span>
-                    <span style="color: #81c784; font-weight: 500;">5 processed</span>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Documents:</span>
+                    <span style="color: #81c784; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">5 processed</span>
                 </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                    <span style="color: rgba(255, 255, 255, 0.7); font-size: 0.8rem;">Text Chunks:</span>
-                    <span style="color: #64b5f6; font-weight: 500;">1,247</span>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Text Chunks:</span>
+                    <span style="color: #64b5f6; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">1,247</span>
                 </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                    <span style="color: rgba(255, 255, 255, 0.7); font-size: 0.8rem;">Visual Pages:</span>
-                    <span style="color: #64b5f6; font-weight: 500;">23</span>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Visual Pages:</span>
+                    <span style="color: #64b5f6; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">23</span>
                 </div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span style="color: rgba(255, 255, 255, 0.7); font-size: 0.8rem;">Last Updated:</span>
-                    <span style="color: rgba(255, 255, 255, 0.8); font-weight: 500;">2 min ago</span>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                    <span style="color: rgba(255, 255, 255, 0.8); font-size: 0.85rem;">Last Updated:</span>
+                    <span style="color: rgba(255, 255, 255, 0.9); font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">2 min ago</span>
                 </div>
             </div>
-        """), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
     
     # Footer info
     st.markdown("""
