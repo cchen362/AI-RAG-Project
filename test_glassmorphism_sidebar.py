@@ -807,29 +807,39 @@ def main():
             ]
             
             for label, value, color, bg_color, border_color in status_cards:
-                with stylable_container(
-                    key=f"status_card_{label.lower().replace(' ', '_').replace('-', '_')}",
-                    css_styles=f"""
-                    {{
-                        background: {bg_color};
-                        backdrop-filter: blur(15px);
-                        border: 1px solid {border_color};
-                        border-radius: 12px;
-                        padding: 0.65rem 0.75rem;
-                        margin-bottom: 0.5rem;
-                        text-align: center;
-                        height: 60px;
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                        align-items: center;
-                        box-sizing: border-box;
-                        transition: all 0.3s ease;
-                    }}
-                    """
-                ):
-                    st.markdown(f'<div style="color: rgba(255,255,255,0.7); font-size: 0.75rem; text-transform: uppercase; margin: 0 0 3px 0; line-height: 1.1; text-align: center;">{label}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="color: {color}; font-weight: 600; font-size: 1rem; text-align: center; line-height: 1.1; margin: 0;">{value}</div>', unsafe_allow_html=True)
+                # Complete HTML control for perfect centering
+                status_card_html = f"""
+                <div style="
+                    background: {bg_color};
+                    backdrop-filter: blur(15px);
+                    border: 1px solid {border_color};
+                    border-radius: 12px;
+                    margin-bottom: 0.5rem;
+                    text-align: center;
+                    height: 60px;
+                    position: relative;
+                    transition: all 0.3s ease;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                ">
+                    <div style="
+                        color: rgba(255,255,255,0.7); 
+                        font-size: 0.75rem; 
+                        text-transform: uppercase; 
+                        line-height: 1;
+                        margin-bottom: 4px;
+                    ">{label}</div>
+                    <div style="
+                        color: {color}; 
+                        font-weight: 600; 
+                        font-size: 1rem;
+                        line-height: 1;
+                    ">{value}</div>
+                </div>
+                """
+                st.markdown(status_card_html, unsafe_allow_html=True)
         
         # System Status Glass Panel
         with stylable_container(
@@ -1013,43 +1023,43 @@ def main():
                     ):
                         tokens = chat['token_breakdown']
                         
-                        # Clean Token Counter - No background layer, perfect centering
-                        clean_token_counter = f"""
+                        # Perfect Token Counter - Line-height based centering
+                        perfect_token_counter = f"""
                         <div style="padding: 8px 12px; margin: 8px 0 4px 0;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; min-height: 45px;">
-                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Query</div>
-                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['query_tokens']}</div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; height: 40px;">
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Query</div>
+                                    <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['query_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Text RAG</div>
-                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['text_rag_tokens']}</div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Text RAG</div>
+                                    <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['text_rag_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">VLM</div>
-                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['vlm_analysis_tokens']}</div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">VLM</div>
+                                    <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['vlm_analysis_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">SF</div>
-                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['salesforce_api_tokens']}</div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">SF</div>
+                                    <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['salesforce_api_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Re-rank</div>
-                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['reranker_tokens']}</div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Re-rank</div>
+                                    <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['reranker_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Response</div>
-                                    <div style="color: #64b5f6; font-weight: 600;">{tokens['response_tokens']}</div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Response</div>
+                                    <div style="color: #64b5f6; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['response_tokens']}</div>
                                 </div>
-                                <div style="text-align: center; flex: 1; border-left: 1px solid rgba(255, 255, 255, 0.2); padding-left: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;">
-                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase;">Total</div>
-                                    <div style="color: #81c784; font-weight: 600;">{tokens['total_tokens']}</div>
+                                <div style="text-align: center; flex: 1; border-left: 1px solid rgba(255, 255, 255, 0.2); padding-left: 8px;">
+                                    <div style="color: rgba(255, 255, 255, 0.6); font-size: 11px; text-transform: uppercase; line-height: 1; margin: 0;">Total</div>
+                                    <div style="color: #81c784; font-weight: 600; font-size: 13px; line-height: 1.8; margin: 0;">{tokens['total_tokens']}</div>
                                 </div>
                             </div>
                         </div>
                         """
                         
-                        st.markdown(clean_token_counter, unsafe_allow_html=True)
+                        st.markdown(perfect_token_counter, unsafe_allow_html=True)
                     
                     # Source and timestamp
                     source_icons = {'text': '📝', 'visual': '🖼️', 'salesforce': '🏢'}
