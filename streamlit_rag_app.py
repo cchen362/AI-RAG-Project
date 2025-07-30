@@ -335,6 +335,55 @@ def load_glassmorphism_css():
         color: #ffffff !important;
     }
     
+    /* Form Submit Button styling - Fix for Search All Sources button */
+    [data-testid="stFormSubmitButton"] > button,
+    .stFormSubmitButton > button {
+        background: rgba(100, 181, 246, 0.2) !important;
+        border: 1px solid rgba(100, 181, 246, 0.3) !important;
+        border-radius: 12px !important;
+        color: #64b5f6 !important;
+        font-weight: 500 !important;
+        backdrop-filter: blur(10px) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    [data-testid="stFormSubmitButton"] > button:hover,
+    .stFormSubmitButton > button:hover {
+        background: rgba(100, 181, 246, 0.3) !important;
+        border-color: rgba(100, 181, 246, 0.5) !important;
+        transform: translateY(-2px) !important;
+        color: #ffffff !important;
+    }
+    
+    /* File Uploader styling - Better text readability */
+    .stFileUploader {
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+    
+    .stFileUploader > label {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-weight: 500 !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+    }
+    
+    .stFileUploader small {
+        color: rgba(255, 255, 255, 0.7) !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    }
+    
+    /* File uploader drag and drop area */
+    [data-testid="stFileUploaderDropzone"] {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 2px dashed rgba(100, 181, 246, 0.3) !important;
+        border-radius: 12px !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    [data-testid="stFileUploaderDropzone"] > div {
+        color: rgba(255, 255, 255, 0.8) !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    }
+    
     /* Success/Warning/Error message styling for glassmorphism */
     .source-selected {
         background: rgba(129, 199, 132, 0.15) !important;
@@ -1449,7 +1498,7 @@ def main():
 
     # Sidebar - System Configuration  
     with st.sidebar:
-        st.header("🎛️ System Configuration")
+        st.header("🎛️ System Config")
         
         
         # Feature Status with Glassmorphic Cards
@@ -1842,24 +1891,14 @@ def main():
             st.markdown('<h3 style="color: #64b5f6; margin-bottom: 1.5rem; font-size: 1.2rem; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.3);">📁 Document Management</h3>', unsafe_allow_html=True)
             
             
-            # Add glassmorphic file upload area styling
-            st.markdown("""
-            <div style="background: rgba(255, 255, 255, 0.05); border: 2px dashed rgba(100, 181, 246, 0.3); border-radius: 12px; padding: 2rem 1rem; text-align: center; margin: 1rem 0;">
-                <div style="color: #64b5f6; font-size: 2rem; margin-bottom: 0.5rem;">📤</div>
-                <div style="color: rgba(255, 255, 255, 0.8); font-size: 0.9rem;">Drop files here or use uploader below</div>
-                <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.75rem; margin-top: 0.5rem;">PDF, DOCX, TXT, CSV supported</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Functional File Upload with glassmorphic styling
+            # Streamlined File Upload with glassmorphic styling
             try:
                 uploaded_files = st.file_uploader(
                     "📤 Upload Documents",
                     accept_multiple_files=True,
                     type=['pdf', 'txt', 'docx', 'doc', 'xlsx', 'xls', 'csv'],
                     help="Upload documents for multi-source processing (PDF, DOCX, TXT, CSV supported)",
-                    key="main_file_uploader",  # Static key prevents AxiosError 400
-                    label_visibility="collapsed"  # Hide the label since we have the custom area above
+                    key="main_file_uploader"  # Static key prevents AxiosError 400
                 )
                 
                 # If upload fails, show helpful troubleshooting info
