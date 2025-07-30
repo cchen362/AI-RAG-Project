@@ -10,15 +10,27 @@ A sophisticated **Retrieval-Augmented Generation (RAG)** system that combines **
 - **⚡ Instant Docker Startup**: Pre-loaded models enable 0-5 second container startup (vs 2-3 minutes)
 - **🔥 GPU & CPU Support**: Hardware-optimized deployments with automatic detection
 - **🚀 Auto-initialization**: Seamless user experience with loading indicators
+- **🎨 Modern Glassmorphism UI**: Vibrant glassmorphic design with dynamic backgrounds and interactive elements
 - **🌍 Cross-Platform**: Windows, Linux, macOS support with intelligent poppler detection
 - **🛡️ Graceful Degradation**: Text RAG continues working when visual processing unavailable
 - **📋 System Status**: Real-time feature availability indicators in UI
-- **💰 Token Transparency**: 6-column token breakdown for cost monitoring
+- **💰 Token Transparency**: 7-column token breakdown for cost monitoring
 - **📊 Production Ready**: Comprehensive health monitoring and container orchestration
 
 ## 🚀 Quick Start
 
-### **Option 1: Docker Deployment (Recommended)**
+### **Option 1: Quick Launcher (Recommended for Development)**
+```bash
+# Clone and setup
+git clone https://github.com/cchen362/AI-RAG-Project
+cd AI-RAG-Project
+pip install -r requirements.txt
+
+# One-command launch with automatic setup
+python launch_app.py
+```
+
+### **Option 2: Docker Deployment (Recommended for Production)**
 ```bash
 # CPU-optimized instant startup
 docker-compose up ai-rag-app
@@ -31,20 +43,10 @@ docker-compose up -d ai-rag-app
 ```
 Access at: **http://localhost:8501**
 
-### **Option 2: Local Development**
+### **Option 3: Manual Local Development**
 ```bash
-# Clone and setup
-git clone https://github.com/cchen362/AI-RAG-Project
-cd AI-RAG-Project
-pip install -r requirements.txt
-
-# Launch application
+# Traditional streamlit launch
 streamlit run streamlit_rag_app.py
-```
-
-### **Option 3: Quick Launcher**
-```bash
-python launch_app.py
 ```
 
 ## 🏗️ Architecture Overview
@@ -68,29 +70,52 @@ User Query → SimpleRAGOrchestrator → [Text RAG | ColPali Visual | Salesforce
 - **Re-ranking**: BAAI/bge-reranker-base
 - **Vector Database**: FAISS with metadata support
 
+## 🎨 Modern UI/UX Features (July 2025)
+
+### **Glassmorphism Design System**
+- **Dynamic Backgrounds**: Animated gradient backgrounds with glassmorphic overlays
+- **Interactive Elements**: Hover effects, color transitions, and visual feedback
+- **Glass Containers**: Backdrop blur effects with transparency and vibrant borders
+- **Responsive Layout**: Mobile-friendly design with adaptive sidebar navigation
+- **Enhanced Typography**: Glassmorphic text effects with improved visual hierarchy
+
+### **User Experience Enhancements**
+- **Auto-clearing Forms**: Query fields clear automatically after submission
+- **Real-time Status**: Live system capability indicators (Text ✅, Visual ✅/⚠️, Salesforce ✅/❌)
+- **Enhanced Formatting**: Structured responses with bullet points and proper line breaks
+- **Visual Feedback**: Color-coded confidence indicators and loading animations
+- **Development Launcher**: `launch_app.py` utility for streamlined development workflow
+
 ## 📁 Project Structure
 
 ```
 AI-RAG-Project/
 ├── streamlit_rag_app.py          # Main production application
 ├── launch_app.py                 # Development launcher utility
-├── requirements.txt              # Python dependencies  
+├── requirements.txt              # Python dependencies
+├── requirements-gpu.txt          # GPU-optimized dependencies  
 ├── Dockerfile                    # Multi-stage container build
 ├── docker-compose.yml            # GPU support & orchestration
+├── deploy-gpu-server.sh          # GPU server deployment script
 ├── .dockerignore                 # Optimized build context
 ├── scripts/
 │   ├── warm_up_models.py         # Model pre-loading for Docker
 │   └── health_check.py           # Container health monitoring
-├── src/                          # Core components (7 files)
+├── src/                          # Core components (8 files)
 │   ├── rag_system.py            # Main RAG orchestrator
 │   ├── colpali_retriever.py     # Visual document understanding  
 │   ├── salesforce_connector.py  # External data integration
 │   ├── cross_encoder_reranker.py # Intelligent source selection
 │   ├── document_processor.py    # Document processing pipeline
+│   ├── visual_document_processor.py # Visual document processing
 │   ├── text_chunker.py          # Text chunking utilities
 │   └── embedding_manager.py     # Embedding management
+├── tests/                       # Test suite
+│   ├── test_comprehensive.py    # Comprehensive system tests
+│   └── test_salesforce.py       # Salesforce integration tests
 ├── data/documents/              # Document storage
 ├── cache/embeddings/            # Runtime embedding cache
+├── evaluation_results/          # Performance metrics and analysis
 └── CLAUDE.md                    # Development documentation
 ```
 
@@ -190,10 +215,10 @@ ColPali processes PDFs as images, understanding layout and visual elements:
 - No OCR pipeline required
 
 ### **Token Transparency**
-6-column breakdown for cost monitoring:
-| Query | VLM | Salesforce | Re-rank | Response | Total |
-|-------|-----|------------|---------|----------|-------|
-| 12 | 245 | 156 | 10 | 168 | 591 |
+7-column breakdown for cost monitoring:
+| Query | Text RAG | VLM | Salesforce | Re-rank | Response | Total |
+|-------|----------|-----|------------|---------|----------|-------|
+| 12 | 45 | 245 | 156 | 10 | 168 | 636 |
 
 ## ⚙️ Configuration
 
@@ -269,13 +294,14 @@ docker exec ai-rag-cpu python scripts/health_check.py
 - ✅ **Phase 1**: Research & ColPali integration
 - ✅ **Phase 2**: Production app with multi-source architecture  
 - ✅ **Phase 3**: Docker optimization with instant startup
-- ✅ **Cleanup**: Codebase optimization (56+ obsolete files removed)
+- ✅ **Phase 4**: Modern UI/UX with glassmorphism design system
+- ✅ **Cleanup**: Codebase optimization (45+ obsolete files removed)
 
 **🚀 Ready for:**
-- Enterprise deployments with instant startup
+- Enterprise deployments with instant startup and modern UI
 - Kubernetes orchestration and scaling
-- GPU-accelerated cloud environments
-- Multi-tenant configurations
+- GPU-accelerated cloud environments with glassmorphic interface
+- Multi-tenant configurations with professional user experience
 
 ## 🤝 Contributing
 
@@ -363,6 +389,6 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Built with**: Custom Multi-Source RAG Pipeline, ColPali Visual Understanding, BGE Cross-Encoder, OpenAI/Sentence-Transformers, Salesforce API, Streamlit, FAISS, Docker
+**Built with**: Custom Multi-Source RAG Pipeline, ColPali Visual Understanding, BGE Cross-Encoder, OpenAI/Sentence-Transformers, Salesforce API, Streamlit, FAISS, Docker, Modern Glassmorphism UI
 
-**Architecture**: SimpleRAGOrchestrator + BGE Re-ranker + ColPali + Instant Docker Startup
+**Architecture**: SimpleRAGOrchestrator + BGE Re-ranker + ColPali + Instant Docker Startup + Modern UI/UX
