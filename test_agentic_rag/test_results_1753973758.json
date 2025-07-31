@@ -1,0 +1,1491 @@
+{
+  "config": {
+    "max_agent_steps": 5,
+    "confidence_threshold": 0.8,
+    "max_conversation_length": 10,
+    "memory_file": "test_memory.json",
+    "enable_logging": true,
+    "timeout_seconds": 300
+  },
+  "test_results": [
+    {
+      "query": "What is a transformer architecture in machine learning?",
+      "expected_answer": "A transformer is a neural network architecture that uses self-attention mechanisms to process sequences of data. It consists of encoder and decoder layers with multi-head attention, positional encoding, and feedforward networks.",
+      "timestamp": 1753973757.4221115,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00021576881408691406,
+        "steps": 4,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "What is a transformer architecture in machine learning?",
+            "reasoning": "GENERAL_QUERY: Use Text RAG as primary source, adapt based on results",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973757.4222293
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.TEXT_RAG",
+            "query": "What is a transformer architecture in machine learning?",
+            "reasoning": "Retrieved information from text_rag",
+            "result": {
+              "source": "text_rag",
+              "answer": "",
+              "relevant_chunks": [],
+              "confidence": 0.0
+            },
+            "confidence": 0.8,
+            "timestamp": 1753973757.4222865
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "What is a transformer architecture in machine learning?",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973757.4223106
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "What is a transformer architecture in machine learning?",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973757.4223342
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.337,
+          "relevance_score": 0.0,
+          "completeness_score": 0.029,
+          "accuracy_score": 0.5,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.034,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 0.671,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973757.4238987
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 7.62939453125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973757.4239068
+        }
+      },
+      "test_name": "Simple Technical Query",
+      "test_category": "technical",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Show me any performance comparison charts or graphs in the documents and explain what they demonstrate",
+      "expected_answer": "Performance comparison charts showing different models or systems with metrics like accuracy, speed, or efficiency comparisons.",
+      "timestamp": 1753973757.423921,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00021219253540039062,
+        "steps": 4,
+        "sources_used": [
+          "colpali_visual"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Show me any performance comparison charts or graphs in the documents and explain what they demonstrate",
+            "reasoning": "VISUAL_QUERY: Start with ColPali for visual content, then supplement with text if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973757.4240105
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.COLPALI_VISUAL",
+            "query": "Show me any performance comparison charts or graphs in the documents and explain what they demonstrate",
+            "reasoning": "Retrieved information from colpali_visual",
+            "result": {
+              "error": "ColPali error: 'RetrievalMetrics' object has no attribute 'search_time'"
+            },
+            "confidence": 0.75,
+            "timestamp": 1753973757.4241
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Show me any performance comparison charts or graphs in the documents and explain what they demonstrate",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973757.4241176
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Show me any performance comparison charts or graphs in the documents and explain what they demonstrate",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973757.4241347
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.242,
+          "relevance_score": 0.083,
+          "completeness_score": 0.067,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.067,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.205,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973757.4251568
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 6.198883056640625e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973757.4251611
+        }
+      },
+      "test_name": "Visual Content Query",
+      "test_category": "visual",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "What are our current project priorities and resource allocations?",
+      "expected_answer": "Information about active projects, team assignments, budget allocations, and strategic priorities from business systems.",
+      "timestamp": 1753973757.4251716,
+      "agentic": {
+        "answer": "Based on my multi-source analysis:\n\n**Business Context**: Found 0 relevant business records",
+        "execution_time": 1.3556582927703857,
+        "steps": 4,
+        "sources_used": [
+          "salesforce"
+        ],
+        "confidence": 0.25,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "What are our current project priorities and resource allocations?",
+            "reasoning": "BUSINESS_QUERY: Check Salesforce first, then technical sources if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973757.4252381
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.SALESFORCE",
+            "query": "What are our current project priorities and resource allocations?",
+            "reasoning": "Retrieved information from salesforce",
+            "result": {
+              "source": "salesforce",
+              "records": [],
+              "summary": "Found 0 relevant business records",
+              "confidence": 0.2
+            },
+            "confidence": 0.7,
+            "timestamp": 1753973758.7807386
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "What are our current project priorities and resource allocations?",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7807674
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "What are our current project priorities and resource allocations?",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "Based on my multi-source analysis:\n\n**Business Context**: Found 0 relevant business records",
+            "confidence": 0.25,
+            "timestamp": 1753973758.7808294
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.236,
+          "relevance_score": 0.0,
+          "completeness_score": 0.063,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.8,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.071,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 0.758,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.7
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.782016
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 1.0728836059570312e-05,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.7820203
+        }
+      },
+      "test_name": "Business Context Query",
+      "test_category": "business",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Based on the performance metrics shown in any charts or graphs, analyze how they relate to our business requirements, and recommend the optimal configuration for our deployment constraints",
+      "expected_answer": "A comprehensive analysis that combines visual performance data with business requirements to provide deployment recommendations.",
+      "timestamp": 1753973758.7820344,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00020170211791992188,
+        "steps": 4,
+        "sources_used": [
+          "colpali_visual"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Based on the performance metrics shown in any charts or graphs, analyze how they relate to our business requirements, and recommend the optimal configuration for our deployment constraints",
+            "reasoning": "VISUAL_QUERY: Start with ColPali for visual content, then supplement with text if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7821143
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.COLPALI_VISUAL",
+            "query": "Based on the performance metrics shown in any charts or graphs, analyze how they relate to our business requirements, and recommend the optimal configuration for our deployment constraints",
+            "reasoning": "Retrieved information from colpali_visual",
+            "result": {
+              "error": "ColPali error: 'RetrievalMetrics' object has no attribute 'search_time'"
+            },
+            "confidence": 0.75,
+            "timestamp": 1753973758.782202
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Based on the performance metrics shown in any charts or graphs, analyze how they relate to our business requirements, and recommend the optimal configuration for our deployment constraints",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7822206
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Based on the performance metrics shown in any charts or graphs, analyze how they relate to our business requirements, and recommend the optimal configuration for our deployment constraints",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.7822368
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.472,
+          "relevance_score": 0.0,
+          "completeness_score": 0.067,
+          "accuracy_score": 1.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.067,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.195,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, high accuracy, efficient delivery.",
+          "timestamp": 1753973758.7835553
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 5.7220458984375e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.7835593
+        }
+      },
+      "test_name": "Complex Multi-hop Query",
+      "test_category": "complex",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Tell me about neural network architectures, then focus specifically on attention mechanisms, and finally show me any relevant mathematical formulations",
+      "expected_answer": "A progressively detailed explanation starting with general neural networks, drilling down to attention mechanisms, and providing mathematical details.",
+      "timestamp": 1753973758.7835705,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00013875961303710938,
+        "steps": 4,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Tell me about neural network architectures, then focus specifically on attention mechanisms, and finally show me any relevant mathematical formulations",
+            "reasoning": "GENERAL_QUERY: Use Text RAG as primary source, adapt based on results",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7836392
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.TEXT_RAG",
+            "query": "Tell me about neural network architectures, then focus specifically on attention mechanisms, and finally show me any relevant mathematical formulations",
+            "reasoning": "Retrieved information from text_rag",
+            "result": {
+              "source": "text_rag",
+              "answer": "",
+              "relevant_chunks": [],
+              "confidence": 0.0
+            },
+            "confidence": 0.8,
+            "timestamp": 1753973758.7836683
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Tell me about neural network architectures, then focus specifically on attention mechanisms, and finally show me any relevant mathematical formulations",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7836895
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Tell me about neural network architectures, then focus specifically on attention mechanisms, and finally show me any relevant mathematical formulations",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.7837098
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.484,
+          "relevance_score": 0.059,
+          "completeness_score": 0.056,
+          "accuracy_score": 1.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.056,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.02,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, high accuracy, efficient delivery.",
+          "timestamp": 1753973758.7848256
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 4.291534423828125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.784829
+        }
+      },
+      "test_name": "Progressive Query Refinement",
+      "test_category": "complex",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Find technical specifications in the documentation, cross-reference them with our business constraints from project data, and provide implementation recommendations",
+      "expected_answer": "Integrated recommendations that combine technical specifications with business constraints.",
+      "timestamp": 1753973758.7848384,
+      "agentic": {
+        "answer": "Based on my multi-source analysis:\n\n**Business Context**: Found 0 relevant business records",
+        "execution_time": 0.00023436546325683594,
+        "steps": 4,
+        "sources_used": [
+          "salesforce"
+        ],
+        "confidence": 0.25,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Find technical specifications in the documentation, cross-reference them with our business constraints from project data, and provide implementation recommendations",
+            "reasoning": "BUSINESS_QUERY: Check Salesforce first, then technical sources if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7848988
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.SALESFORCE",
+            "query": "Find technical specifications in the documentation, cross-reference them with our business constraints from project data, and provide implementation recommendations",
+            "reasoning": "Retrieved information from salesforce",
+            "result": {
+              "source": "salesforce",
+              "records": [],
+              "summary": "Found 0 relevant business records",
+              "confidence": 0.2
+            },
+            "confidence": 0.7,
+            "timestamp": 1753973758.7850327
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Find technical specifications in the documentation, cross-reference them with our business constraints from project data, and provide implementation recommendations",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7850509
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Find technical specifications in the documentation, cross-reference them with our business constraints from project data, and provide implementation recommendations",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "Based on my multi-source analysis:\n\n**Business Context**: Found 0 relevant business records",
+            "confidence": 0.25,
+            "timestamp": 1753973758.7850726
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.263,
+          "relevance_score": 0.062,
+          "completeness_score": 0.111,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.8,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.111,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.0,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.7
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.7863312
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 4.5299530029296875e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.786335
+        }
+      },
+      "test_name": "Cross-Source Intelligence",
+      "test_category": "complex",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Explain the technical details behind any performance charts or architectural diagrams you can find",
+      "expected_answer": "Technical explanation of visual content combining visual analysis with detailed technical knowledge.",
+      "timestamp": 1753973758.786368,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.0001614093780517578,
+        "steps": 4,
+        "sources_used": [
+          "colpali_visual"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Explain the technical details behind any performance charts or architectural diagrams you can find",
+            "reasoning": "VISUAL_QUERY: Start with ColPali for visual content, then supplement with text if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7864196
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.COLPALI_VISUAL",
+            "query": "Explain the technical details behind any performance charts or architectural diagrams you can find",
+            "reasoning": "Retrieved information from colpali_visual",
+            "result": {
+              "error": "ColPali error: 'RetrievalMetrics' object has no attribute 'search_time'"
+            },
+            "confidence": 0.75,
+            "timestamp": 1753973758.7864914
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Explain the technical details behind any performance charts or architectural diagrams you can find",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7865138
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Explain the technical details behind any performance charts or architectural diagrams you can find",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.78653
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.205,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.0,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.53,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.7881129
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 4.291534423828125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.7881238
+        }
+      },
+      "test_name": "Visual + Technical Integration",
+      "test_category": "visual-technical",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "What's the best approach for our implementation?",
+      "expected_answer": "Clarifying questions or recommendations based on available context and business requirements.",
+      "timestamp": 1753973758.7881334,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00012922286987304688,
+        "steps": 4,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "What's the best approach for our implementation?",
+            "reasoning": "TECHNICAL_QUERY: Start with Text RAG, use ColPali for technical diagrams if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7881966
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.TEXT_RAG",
+            "query": "What's the best approach for our implementation?",
+            "reasoning": "Retrieved information from text_rag",
+            "result": {
+              "source": "text_rag",
+              "answer": "",
+              "relevant_chunks": [],
+              "confidence": 0.0
+            },
+            "confidence": 0.8,
+            "timestamp": 1753973758.7882235
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "What's the best approach for our implementation?",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.788243
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "What's the best approach for our implementation?",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.7882628
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.25,
+          "relevance_score": 0.0,
+          "completeness_score": 0.182,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.182,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.645,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.789927
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 4.76837158203125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.7899306
+        }
+      },
+      "test_name": "Ambiguous Query Resolution",
+      "test_category": "complex",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Analyze our current resource usage and suggest optimizations based on performance data and cost constraints",
+      "expected_answer": "Resource optimization recommendations combining performance metrics with cost analysis.",
+      "timestamp": 1753973758.7899408,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00012063980102539062,
+        "steps": 4,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Analyze our current resource usage and suggest optimizations based on performance data and cost constraints",
+            "reasoning": "GENERAL_QUERY: Use Text RAG as primary source, adapt based on results",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7900019
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.TEXT_RAG",
+            "query": "Analyze our current resource usage and suggest optimizations based on performance data and cost constraints",
+            "reasoning": "Retrieved information from text_rag",
+            "result": {
+              "source": "text_rag",
+              "answer": "",
+              "relevant_chunks": [],
+              "confidence": 0.0
+            },
+            "confidence": 0.8,
+            "timestamp": 1753973758.790025
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Analyze our current resource usage and suggest optimizations based on performance data and cost constraints",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7900422
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Analyze our current resource usage and suggest optimizations based on performance data and cost constraints",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.7900615
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.205,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.0,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.759,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.7916234
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 4.291534423828125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.791628
+        }
+      },
+      "test_name": "Resource Optimization Query",
+      "test_category": "business-technical",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Compare different approaches mentioned in the documentation and rank them by suitability for our use case",
+      "expected_answer": "Comparative analysis of different approaches with rankings and justifications based on business context.",
+      "timestamp": 1753973758.7916374,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.0001316070556640625,
+        "steps": 4,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Compare different approaches mentioned in the documentation and rank them by suitability for our use case",
+            "reasoning": "GENERAL_QUERY: Use Text RAG as primary source, adapt based on results",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7917023
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.TEXT_RAG",
+            "query": "Compare different approaches mentioned in the documentation and rank them by suitability for our use case",
+            "reasoning": "Retrieved information from text_rag",
+            "result": {
+              "source": "text_rag",
+              "answer": "",
+              "relevant_chunks": [],
+              "confidence": 0.0
+            },
+            "confidence": 0.8,
+            "timestamp": 1753973758.7917297
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Compare different approaches mentioned in the documentation and rank them by suitability for our use case",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7917488
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Compare different approaches mentioned in the documentation and rank them by suitability for our use case",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.7917693
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.205,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.0,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.471,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.7934976
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 5.0067901611328125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.7935019
+        }
+      },
+      "test_name": "Comparative Analysis",
+      "test_category": "analytical",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Tell me about the flibbertigibbet quantum discombobulator implementation strategies",
+      "expected_answer": "Acknowledgment that the query contains nonsensical terms and request for clarification.",
+      "timestamp": 1753973758.7935128,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00013518333435058594,
+        "steps": 4,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Tell me about the flibbertigibbet quantum discombobulator implementation strategies",
+            "reasoning": "TECHNICAL_QUERY: Start with Text RAG, use ColPali for technical diagrams if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7935812
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.TEXT_RAG",
+            "query": "Tell me about the flibbertigibbet quantum discombobulator implementation strategies",
+            "reasoning": "Retrieved information from text_rag",
+            "result": {
+              "source": "text_rag",
+              "answer": "",
+              "relevant_chunks": [],
+              "confidence": 0.0
+            },
+            "confidence": 0.8,
+            "timestamp": 1753973758.793607
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Tell me about the flibbertigibbet quantum discombobulator implementation strategies",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7936285
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Tell me about the flibbertigibbet quantum discombobulator implementation strategies",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.7936478
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.25,
+          "relevance_score": 0.0,
+          "completeness_score": 0.182,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.182,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.759,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.795323
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 4.291534423828125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.7953262
+        }
+      },
+      "test_name": "Error Handling Test",
+      "test_category": "edge-case",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Based on what we just discussed, what are the implementation challenges?",
+      "expected_answer": "Response should indicate lack of previous context and request clarification.",
+      "timestamp": 1753973758.795336,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00013566017150878906,
+        "steps": 4,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Based on what we just discussed, what are the implementation challenges?",
+            "reasoning": "TECHNICAL_QUERY: Start with Text RAG, use ColPali for technical diagrams if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.795399
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.TEXT_RAG",
+            "query": "Based on what we just discussed, what are the implementation challenges?",
+            "reasoning": "Retrieved information from text_rag",
+            "result": {
+              "source": "text_rag",
+              "answer": "",
+              "relevant_chunks": [],
+              "confidence": 0.0
+            },
+            "confidence": 0.8,
+            "timestamp": 1753973758.795433
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Based on what we just discussed, what are the implementation challenges?",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.795453
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Based on what we just discussed, what are the implementation challenges?",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.795472
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.205,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.0,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 2.013,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.7971148
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 4.291534423828125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.7971191
+        }
+      },
+      "test_name": "Context-Dependent Follow-up",
+      "test_category": "conversational",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "Provide a comprehensive technical analysis of transformer attention mechanisms, including mathematical formulations, computational complexity, and implementation considerations",
+      "expected_answer": "Detailed technical explanation with mathematical details, complexity analysis, and practical implementation guidance.",
+      "timestamp": 1753973758.7971296,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00012826919555664062,
+        "steps": 4,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "Provide a comprehensive technical analysis of transformer attention mechanisms, including mathematical formulations, computational complexity, and implementation considerations",
+            "reasoning": "TECHNICAL_QUERY: Start with Text RAG, use ColPali for technical diagrams if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7971997
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.TEXT_RAG",
+            "query": "Provide a comprehensive technical analysis of transformer attention mechanisms, including mathematical formulations, computational complexity, and implementation considerations",
+            "reasoning": "Retrieved information from text_rag",
+            "result": {
+              "source": "text_rag",
+              "answer": "",
+              "relevant_chunks": [],
+              "confidence": 0.0
+            },
+            "confidence": 0.8,
+            "timestamp": 1753973758.7972229
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "Provide a comprehensive technical analysis of transformer attention mechanisms, including mathematical formulations, computational complexity, and implementation considerations",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7972414
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "Provide a comprehensive technical analysis of transformer attention mechanisms, including mathematical formulations, computational complexity, and implementation considerations",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.797259
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.205,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.0,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.308,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.7989419
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 5.0067901611328125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.7989464
+        }
+      },
+      "test_name": "Detailed Technical Deep-dive",
+      "test_category": "technical",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "How would you implement a production-ready RAG system with multi-modal capabilities for a enterprise environment?",
+      "expected_answer": "Comprehensive implementation guide covering architecture, scalability, security, and operational considerations.",
+      "timestamp": 1753973758.798956,
+      "agentic": {
+        "answer": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+        "execution_time": 0.00012874603271484375,
+        "steps": 4,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.3,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "How would you implement a production-ready RAG system with multi-modal capabilities for a enterprise environment?",
+            "reasoning": "GENERAL_QUERY: Use Text RAG as primary source, adapt based on results",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.7990184
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.TEXT_RAG",
+            "query": "How would you implement a production-ready RAG system with multi-modal capabilities for a enterprise environment?",
+            "reasoning": "Retrieved information from text_rag",
+            "result": {
+              "source": "text_rag",
+              "answer": "",
+              "relevant_chunks": [],
+              "confidence": 0.0
+            },
+            "confidence": 0.8,
+            "timestamp": 1753973758.7990444
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "How would you implement a production-ready RAG system with multi-modal capabilities for a enterprise environment?",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.7990644
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "How would you implement a production-ready RAG system with multi-modal capabilities for a enterprise environment?",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "I apologize, but I couldn't retrieve sufficient information to answer your query. Please try rephrasing or check if the relevant documents are available.",
+            "confidence": 0.3,
+            "timestamp": 1753973758.7990854
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.205,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.7,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.0,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.366,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.5
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.80069
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 4.291534423828125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.800695
+        }
+      },
+      "test_name": "Real-world Application",
+      "test_category": "practical",
+      "test_status": "FAILED"
+    },
+    {
+      "query": "What are the current status updates for all active projects and any urgent issues that need attention?",
+      "expected_answer": "Current project status information and urgent issues from business systems.",
+      "timestamp": 1753973758.8007052,
+      "agentic": {
+        "answer": "Based on my multi-source analysis:\n\n**Business Context**: Found 0 relevant business records",
+        "execution_time": 0.00022077560424804688,
+        "steps": 4,
+        "sources_used": [
+          "salesforce"
+        ],
+        "confidence": 0.25,
+        "reasoning_chain": [
+          {
+            "step": "AgentStep.THINK",
+            "source": null,
+            "query": "What are the current status updates for all active projects and any urgent issues that need attention?",
+            "reasoning": "BUSINESS_QUERY: Check Salesforce first, then technical sources if needed",
+            "result": null,
+            "confidence": 0.7,
+            "timestamp": 1753973758.8007627
+          },
+          {
+            "step": "AgentStep.RETRIEVE",
+            "source": "SourceType.SALESFORCE",
+            "query": "What are the current status updates for all active projects and any urgent issues that need attention?",
+            "reasoning": "Retrieved information from salesforce",
+            "result": {
+              "source": "salesforce",
+              "records": [],
+              "summary": "Found 0 relevant business records",
+              "confidence": 0.2
+            },
+            "confidence": 0.7,
+            "timestamp": 1753973758.8008802
+          },
+          {
+            "step": "AgentStep.RETHINK",
+            "source": null,
+            "query": "What are the current status updates for all active projects and any urgent issues that need attention?",
+            "reasoning": "INSUFFICIENT: No successful retrievals",
+            "result": null,
+            "confidence": 0.2,
+            "timestamp": 1753973758.8009055
+          },
+          {
+            "step": "AgentStep.GENERATE",
+            "source": null,
+            "query": "What are the current status updates for all active projects and any urgent issues that need attention?",
+            "reasoning": "Synthesized final answer from available knowledge",
+            "result": "Based on my multi-source analysis:\n\n**Business Context**: Found 0 relevant business records",
+            "confidence": 0.25,
+            "timestamp": 1753973758.8009262
+          }
+        ],
+        "evaluation": {
+          "overall_score": 0.245,
+          "relevance_score": 0.0,
+          "completeness_score": 0.1,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.8,
+          "efficiency_score": 1.0,
+          "detailed_scores": {
+            "keyword_overlap": 0.1,
+            "semantic_similarity": 0.0,
+            "response_length_ratio": 1.213,
+            "technical_terms_coverage": 1.0,
+            "structure_quality": 0.7
+          },
+          "explanation": "Response shows Limited relevance to the query, incomplete coverage, questionable accuracy, efficient delivery.",
+          "timestamp": 1753973758.8024237
+        }
+      },
+      "baseline": {
+        "answer": "",
+        "execution_time": 4.76837158203125e-06,
+        "steps": 1,
+        "sources_used": [
+          "text_rag"
+        ],
+        "confidence": 0.0,
+        "relevant_chunks": 0,
+        "evaluation": {
+          "overall_score": 0.0,
+          "relevance_score": 0.0,
+          "completeness_score": 0.0,
+          "accuracy_score": 0.0,
+          "coherence_score": 0.0,
+          "efficiency_score": 0.0,
+          "detailed_scores": {},
+          "explanation": "Evaluation failed - missing response or expected answer",
+          "timestamp": 1753973758.802429
+        }
+      },
+      "test_name": "Time-Sensitive Query",
+      "test_category": "business",
+      "test_status": "FAILED"
+    }
+  ],
+  "memory_summary": {
+    "session_duration": 26.947844743728638,
+    "total_turns": 10,
+    "avg_confidence": 0.29,
+    "avg_execution_time": 0.000152587890625,
+    "source_usage": {
+      "salesforce": 2,
+      "colpali_visual": 1,
+      "text_rag": 7
+    },
+    "recent_topics": [
+      "Provide a comprehensive technical analysis of transformer attention mechanisms, including mathematical formulations, computational complexity, and implementation considerations",
+      "How would you implement a production-ready RAG system with multi-modal capabilities for a enterprise environment?",
+      "What are the current status updates for all active projects and any urgent issues that need attention?"
+    ],
+    "knowledge_fragments": 0
+  },
+  "timestamp": 1753973758.802483
+}

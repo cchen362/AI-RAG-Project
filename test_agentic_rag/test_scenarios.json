@@ -1,0 +1,137 @@
+[
+  {
+    "name": "Simple Technical Query",
+    "category": "technical",
+    "query": "What is a transformer architecture in machine learning?",
+    "expected_answer": "A transformer is a neural network architecture that uses self-attention mechanisms to process sequences of data. It consists of encoder and decoder layers with multi-head attention, positional encoding, and feedforward networks.",
+    "test_both": true,
+    "complexity": "low",
+    "description": "Basic technical query that should work well with single-turn approach"
+  },
+  {
+    "name": "Visual Content Query",
+    "category": "visual",
+    "query": "Show me any performance comparison charts or graphs in the documents and explain what they demonstrate",
+    "expected_answer": "Performance comparison charts showing different models or systems with metrics like accuracy, speed, or efficiency comparisons.",
+    "test_both": true,
+    "complexity": "medium",
+    "description": "Query requiring visual document analysis - should favor agentic approach with ColPali"
+  },
+  {
+    "name": "Business Context Query",
+    "category": "business",
+    "query": "What are our current project priorities and resource allocations?",
+    "expected_answer": "Information about active projects, team assignments, budget allocations, and strategic priorities from business systems.",
+    "test_both": true,
+    "complexity": "medium",
+    "description": "Business query requiring Salesforce data - tests source selection intelligence"
+  },
+  {
+    "name": "Complex Multi-hop Query",
+    "category": "complex",
+    "query": "Based on the performance metrics shown in any charts or graphs, analyze how they relate to our business requirements, and recommend the optimal configuration for our deployment constraints",
+    "expected_answer": "A comprehensive analysis that combines visual performance data with business requirements to provide deployment recommendations.",
+    "test_both": true,
+    "complexity": "high",
+    "description": "Multi-step reasoning query requiring visual analysis + business context + technical synthesis"
+  },
+  {
+    "name": "Progressive Query Refinement",
+    "category": "complex",
+    "query": "Tell me about neural network architectures, then focus specifically on attention mechanisms, and finally show me any relevant mathematical formulations",
+    "expected_answer": "A progressively detailed explanation starting with general neural networks, drilling down to attention mechanisms, and providing mathematical details.",
+    "test_both": true,
+    "complexity": "high",
+    "description": "Multi-turn query that should benefit significantly from agentic reasoning and memory"
+  },
+  {
+    "name": "Cross-Source Intelligence",
+    "category": "complex",
+    "query": "Find technical specifications in the documentation, cross-reference them with our business constraints from project data, and provide implementation recommendations",
+    "expected_answer": "Integrated recommendations that combine technical specifications with business constraints.",
+    "test_both": true,
+    "complexity": "high",
+    "description": "Requires intelligent orchestration across multiple knowledge sources"
+  },
+  {
+    "name": "Visual + Technical Integration",
+    "category": "visual-technical",
+    "query": "Explain the technical details behind any performance charts or architectural diagrams you can find",
+    "expected_answer": "Technical explanation of visual content combining visual analysis with detailed technical knowledge.",
+    "test_both": true,
+    "complexity": "medium",
+    "description": "Tests ability to combine visual understanding with technical depth"
+  },
+  {
+    "name": "Ambiguous Query Resolution",
+    "category": "complex",
+    "query": "What's the best approach for our implementation?",
+    "expected_answer": "Clarifying questions or recommendations based on available context and business requirements.",
+    "test_both": true,
+    "complexity": "high",
+    "description": "Vague query that requires context understanding and intelligent follow-up"
+  },
+  {
+    "name": "Resource Optimization Query",
+    "category": "business-technical",
+    "query": "Analyze our current resource usage and suggest optimizations based on performance data and cost constraints",
+    "expected_answer": "Resource optimization recommendations combining performance metrics with cost analysis.",
+    "test_both": true,
+    "complexity": "high",
+    "description": "Requires business data + technical performance analysis + cost optimization"
+  },
+  {
+    "name": "Comparative Analysis",
+    "category": "analytical",
+    "query": "Compare different approaches mentioned in the documentation and rank them by suitability for our use case",
+    "expected_answer": "Comparative analysis of different approaches with rankings and justifications based on business context.",
+    "test_both": true,
+    "complexity": "high",
+    "description": "Complex analytical query requiring synthesis of multiple information sources"
+  },
+  {
+    "name": "Error Handling Test",
+    "category": "edge-case",
+    "query": "Tell me about the flibbertigibbet quantum discombobulator implementation strategies",
+    "expected_answer": "Acknowledgment that the query contains nonsensical terms and request for clarification.",
+    "test_both": true,
+    "complexity": "low",
+    "description": "Tests handling of nonsensical or invalid queries"
+  },
+  {
+    "name": "Context-Dependent Follow-up",
+    "category": "conversational",
+    "query": "Based on what we just discussed, what are the implementation challenges?",
+    "expected_answer": "Response should indicate lack of previous context and request clarification.",
+    "test_both": true,
+    "complexity": "medium",
+    "description": "Tests handling of context-dependent queries without prior conversation"
+  },
+  {
+    "name": "Detailed Technical Deep-dive",
+    "category": "technical",
+    "query": "Provide a comprehensive technical analysis of transformer attention mechanisms, including mathematical formulations, computational complexity, and implementation considerations",
+    "expected_answer": "Detailed technical explanation with mathematical details, complexity analysis, and practical implementation guidance.",
+    "test_both": true,
+    "complexity": "high",
+    "description": "Deep technical query testing knowledge depth and synthesis capabilities"
+  },
+  {
+    "name": "Real-world Application",
+    "category": "practical",
+    "query": "How would you implement a production-ready RAG system with multi-modal capabilities for a enterprise environment?",
+    "expected_answer": "Comprehensive implementation guide covering architecture, scalability, security, and operational considerations.",
+    "test_both": true,
+    "complexity": "high",
+    "description": "Practical implementation query requiring synthesis of technical and business knowledge"
+  },
+  {
+    "name": "Time-Sensitive Query",
+    "category": "business",
+    "query": "What are the current status updates for all active projects and any urgent issues that need attention?",
+    "expected_answer": "Current project status information and urgent issues from business systems.",
+    "test_both": true,
+    "complexity": "medium",
+    "description": "Business query requiring current/real-time information from Salesforce or similar systems"
+  }
+]
