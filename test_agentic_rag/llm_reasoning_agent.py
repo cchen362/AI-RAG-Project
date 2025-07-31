@@ -192,7 +192,11 @@ class LLMReasoningAgent:
         reasoning_chain = []
         total_llm_tokens = 0
         
-        self.logger.info(f"Starting TRUE agentic reasoning for: {user_query}")
+        self.logger.info(f"\n🚀 STARTING TRUE AGENTIC REASONING")
+        self.logger.info(f"{'='*80}")
+        self.logger.info(f"Query: {user_query}")
+        self.logger.info(f"Available sources: {list(self.get_available_sources().keys())}")
+        self.logger.info(f"Max steps: {self.max_reasoning_steps}, Confidence threshold: {self.confidence_threshold}")
         
         # Initialize reasoning context
         reasoning_context = {
@@ -255,6 +259,14 @@ class LLMReasoningAgent:
         total_llm_tokens += final_answer.tokens_used
         reasoning_chain.append(final_answer)
         
+        # Log the final generated response for debugging
+        self.logger.info(f"\n🎯 FINAL GENERATED RESPONSE:")
+        self.logger.info(f"{'='*60}")
+        self.logger.info(f"Query: {user_query}")
+        self.logger.info(f"Final Answer: {final_answer.result}")
+        self.logger.info(f"Confidence: {final_answer.confidence:.2f}")
+        self.logger.info(f"{'='*60}")
+        
         # Build comprehensive response
         execution_time = time.time() - start_time
         sources_queried = [action.source for action in reasoning_chain if action.source and action.result]
@@ -271,7 +283,37 @@ class LLMReasoningAgent:
             cost_breakdown=self._calculate_cost_breakdown(reasoning_chain, total_llm_tokens)
         )
         
-        self.logger.info(f"TRUE agentic reasoning complete: {len(reasoning_chain)} steps, {execution_time:.2f}s, {total_llm_tokens} tokens")
+        # COMPREHENSIVE DEBUG SUMMARY
+        self.logger.info(f"\n🎉 TRUE AGENTIC REASONING COMPLETE")
+        self.logger.info(f"{'='*80}")
+        self.logger.info(f"Total steps: {len(reasoning_chain)}")
+        self.logger.info(f"Execution time: {execution_time:.2f}s")
+        self.logger.info(f"LLM tokens: {total_llm_tokens}")
+        self.logger.info(f"Sources queried: {[s.value for s in sources_queried]}")
+        self.logger.info(f"Final confidence: {final_answer.confidence:.2f}")
+        self.logger.info(f"Total cost: ${self.total_cost:.4f}")
+        
+        # Step-by-step summary
+        self.logger.info(f"\n📋 REASONING CHAIN SUMMARY:")
+        for i, action in enumerate(reasoning_chain, 1):
+            if action.step == ReasoningStep.THOUGHT:
+                decision = "CONTINUE" if "CONTINUE" in action.content.upper() else "COMPLETE"
+                self.logger.info(f"  {i}. THOUGHT → {decision}")
+            elif action.step == ReasoningStep.ACTION:
+                source = action.source.value if action.source else "none"
+                self.logger.info(f"  {i}. ACTION → {source}")
+            elif action.step == ReasoningStep.OBSERVATION:
+                if action.source:
+                    success = "✅" if action.result else "❌"
+                    self.logger.info(f"  {i}. OBSERVATION → {action.source.value} {success}")
+                else:
+                    self.logger.info(f"  {i}. GENERATE → Final answer")
+            elif action.step == ReasoningStep.REFLECTION:
+                assessment = "CONTINUE" if "CONTINUE" in action.content.upper() else "SUFFICIENT"
+                self.logger.info(f"  {i}. REFLECTION → {assessment} (conf: {action.confidence:.2f})")
+        
+        self.logger.info(f"{'='*80}")
+        
         return response
     
     def _llm_thought_step(self, context: Dict, step_number: int) -> ReasoningAction:
@@ -309,8 +351,29 @@ Respond with either:
 
 Be cost-conscious and efficient. Only continue if additional sources would significantly improve the answer."""
 
+        # DEBUG LOGGING
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info(f"🧠 LLM THOUGHT STEP {step_number}")
+        self.logger.info(f"{'='*60}")
+        self.logger.info(f"Query: {context['query']}")
+        self.logger.info(f"Available sources: {list(context['available_sources'].keys())}")
+        self.logger.info(f"Results so far: {list(context['results_gathered'].keys())}")
+        self.logger.info(f"\n📝 PROMPT TO LLM:")
+        self.logger.info(f"{prompt}")
+
         try:
             response = self._call_llm(prompt)
+            
+            # DEBUG LOGGING - LLM RESPONSE
+            self.logger.info(f"\n🤖 LLM RESPONSE:")
+            self.logger.info(f"{response['content']}")
+            self.logger.info(f"Tokens used: {response['tokens']}")
+            self.logger.info(f"Cost: ${response.get('cost', 0):.4f}")
+            
+            # Analyze decision
+            decision = "CONTINUE" if "CONTINUE" in response["content"].upper() else "COMPLETE"
+            self.logger.info(f"\n🎯 LLM DECISION: {decision}")
+            
             return ReasoningAction(
                 step=ReasoningStep.THOUGHT,
                 content=response["content"],
@@ -320,7 +383,7 @@ Be cost-conscious and efficient. Only continue if additional sources would signi
                 timestamp=time.time()
             )
         except Exception as e:
-            self.logger.error(f"LLM thought step failed: {e}")
+            self.logger.error(f"❌ LLM thought step failed: {e}")
             return ReasoningAction(
                 step=ReasoningStep.THOUGHT,
                 content="COMPLETE: Error in reasoning, proceeding with available information",
@@ -333,7 +396,12 @@ Be cost-conscious and efficient. Only continue if additional sources would signi
         """
         ACTION step: LLM decides which specific source to query next.
         """
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info(f"⚡ LLM ACTION STEP")
+        self.logger.info(f"{'='*60}")
+        
         if "COMPLETE" in thought.content.upper():
+            self.logger.info(f"🛑 THOUGHT decided COMPLETE - no action needed")
             return ReasoningAction(
                 step=ReasoningStep.ACTION,
                 content="No action needed - proceeding to final answer generation",
@@ -347,7 +415,10 @@ Be cost-conscious and efficient. Only continue if additional sources would signi
             if source_type.value not in context["results_gathered"]
         ]
         
+        self.logger.info(f"Available unqueried sources: {[s.value for s in available_sources]}")
+        
         if not available_sources:
+            self.logger.info(f"🚫 No more sources available - all have been queried")
             return ReasoningAction(
                 step=ReasoningStep.ACTION,
                 content="No more sources available",
@@ -382,9 +453,18 @@ Choose based on:
 
 Source options: {[s.value for s in available_sources]}"""
 
+        self.logger.info(f"\n📝 PROMPT TO LLM:")
+        self.logger.info(f"{prompt}")
+
         try:
             response = self._call_llm(prompt)
             content = response["content"]
+            
+            # DEBUG LOGGING - LLM RESPONSE
+            self.logger.info(f"\n🤖 LLM RESPONSE:")
+            self.logger.info(f"{content}")
+            self.logger.info(f"Tokens used: {response['tokens']}")
+            self.logger.info(f"Cost: ${response.get('cost', 0):.4f}")
             
             # Extract selected source
             selected_source = None
@@ -392,6 +472,10 @@ Source options: {[s.value for s in available_sources]}"""
                 if source.value in content.lower():
                     selected_source = source
                     break
+            
+            self.logger.info(f"\n🎯 LLM SOURCE SELECTION: {selected_source.value if selected_source else 'NONE DETECTED'}")
+            if not selected_source:
+                self.logger.warning(f"⚠️ Could not extract source from LLM response!")
             
             return ReasoningAction(
                 step=ReasoningStep.ACTION,
@@ -405,6 +489,9 @@ Source options: {[s.value for s in available_sources]}"""
         except Exception as e:
             # Fallback to first available source
             fallback_source = available_sources[0] if available_sources else None
+            self.logger.error(f"❌ LLM action step failed: {e}")
+            self.logger.info(f"🔄 Falling back to: {fallback_source.value if fallback_source else 'none'}")
+            
             return ReasoningAction(
                 step=ReasoningStep.ACTION,
                 content=f"Fallback to {fallback_source.value if fallback_source else 'none'}",
@@ -430,8 +517,14 @@ Source options: {[s.value for s in available_sources]}"""
                 observation_content = f"ColPali returned visual analysis results"
                 
             elif source == SourceType.SALESFORCE and self.salesforce_connector:
-                result = self.salesforce_connector.query(query)
-                observation_content = f"Salesforce returned: {result.get('total_records', 0)} records"
+                # Use correct Salesforce connector method
+                try:
+                    result = self.salesforce_connector.search_knowledge_realtime(query, limit=5)
+                    observation_content = f"Salesforce returned: {len(result)} knowledge articles"
+                except Exception as sf_error:
+                    self.logger.error(f"Salesforce query failed: {sf_error}")
+                    result = []
+                    observation_content = f"Salesforce query failed: {str(sf_error)}"
                 
             else:
                 result = None
@@ -467,6 +560,13 @@ Source options: {[s.value for s in available_sources]}"""
         """
         results_summary = self._format_results_summary(context["results_gathered"])
         recent_actions = reasoning_chain[-3:] if len(reasoning_chain) >= 3 else reasoning_chain
+        remaining_sources = [s.value for s in context['available_sources'].keys() if s.value not in context['results_gathered']]
+        
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info(f"🤔 LLM REFLECTION STEP")
+        self.logger.info(f"{'='*60}")
+        self.logger.info(f"Results gathered: {list(context['results_gathered'].keys())}")
+        self.logger.info(f"Remaining sources: {remaining_sources}")
         
         prompt = f"""Evaluate the information gathered so far and decide if it's sufficient.
 
@@ -478,7 +578,7 @@ Information Gathered:
 Recent Actions:
 {self._format_actions_for_prompt(recent_actions)}
 
-Available Remaining Sources: {[s.value for s in context['available_sources'].keys() if s.value not in context['results_gathered']]}
+Available Remaining Sources: {remaining_sources}
 
 REFLECTION: Evaluate the completeness of information for answering the query.
 
@@ -495,18 +595,41 @@ REASONING: [detailed explanation of your assessment]
 
 Be efficient - only continue if additional sources would substantially improve the answer quality."""
 
+        self.logger.info(f"\n📝 PROMPT TO LLM:")
+        self.logger.info(f"{prompt}")
+
         try:
             response = self._call_llm(prompt)
             content = response["content"]
             
-            # Extract confidence score
+            # DEBUG LOGGING - LLM RESPONSE
+            self.logger.info(f"\n🤖 LLM RESPONSE:")
+            self.logger.info(f"{content}")
+            self.logger.info(f"Tokens used: {response['tokens']}")
+            self.logger.info(f"Cost: ${response.get('cost', 0):.4f}")
+            
+            # Extract confidence score and assessment
             confidence = 0.5  # default
+            assessment = "SUFFICIENT"  # default
+            
             if "CONFIDENCE:" in content:
                 try:
                     conf_line = [line for line in content.split('\n') if 'CONFIDENCE:' in line][0]
                     confidence = float(conf_line.split(':')[1].strip())
                 except:
                     pass
+            
+            if "ASSESSMENT:" in content:
+                try:
+                    assess_line = [line for line in content.split('\n') if 'ASSESSMENT:' in line][0]
+                    assessment = assess_line.split(':')[1].strip().upper()
+                except:
+                    pass
+            elif "CONTINUE" in content.upper():
+                assessment = "CONTINUE"
+            
+            self.logger.info(f"\n🎯 LLM ASSESSMENT: {assessment}")
+            self.logger.info(f"🎯 LLM CONFIDENCE: {confidence:.2f}")
             
             return ReasoningAction(
                 step=ReasoningStep.REFLECTION,
@@ -518,7 +641,7 @@ Be efficient - only continue if additional sources would substantially improve t
             )
             
         except Exception as e:
-            self.logger.error(f"LLM reflection step failed: {e}")
+            self.logger.error(f"❌ LLM reflection step failed: {e}")
             return ReasoningAction(
                 step=ReasoningStep.REFLECTION,
                 content="SUFFICIENT: Error in reflection, proceeding with available information",

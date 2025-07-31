@@ -105,15 +105,49 @@ class EnhancedTestHarness:
             }
             self.rag_system = RAGSystem(text_config)
             
-            # Process documents
+            # Process documents with enhanced debugging
             data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'documents')
+            print(f"[DEBUG] Document directory path: {data_dir}")
+            print(f"[DEBUG] Directory exists: {os.path.exists(data_dir)}")
+            
             if os.path.exists(data_dir):
                 print(f"[INIT] Processing documents from {data_dir}")
-                doc_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) 
+                all_files = os.listdir(data_dir)
+                print(f"[DEBUG] All files in directory: {all_files}")
+                
+                doc_files = [os.path.join(data_dir, f) for f in all_files 
                            if f.endswith(('.txt', '.pdf', '.docx'))]
+                print(f"[DEBUG] Filtered document files: {doc_files}")
+                
                 if doc_files:
-                    result = self.rag_system.add_documents(doc_files)
-                    print(f"✅ Text RAG: Processed {result.get('documents_processed', 0)} documents")
+                    print(f"[INIT] Attempting to process {len(doc_files)} documents...")
+                    try:
+                        result = self.rag_system.add_documents(doc_files)
+                        docs_processed = result.get('documents_processed', 0)
+                        vectors_count = getattr(self.rag_system.embedding_manager, 'get_vector_count', lambda: 0)()
+                        print(f"✅ Text RAG: Processed {docs_processed} documents, {vectors_count} vectors created")
+                        
+                        # Verify documents are actually loaded
+                        if docs_processed == 0 or vectors_count == 0:
+                            print(f"⚠️ WARNING: Document processing may have failed - processed: {docs_processed}, vectors: {vectors_count}")
+                    except Exception as doc_error:
+                        print(f"❌ Document processing error: {doc_error}")
+                        print(f"[DEBUG] RAG system state: {self.rag_system}")
+                else:
+                    print(f"⚠️ No valid document files found in {data_dir}")
+                    print(f"[DEBUG] Supported extensions: .txt, .pdf, .docx")
+            else:
+                print(f"❌ Document directory not found: {data_dir}")
+                # Try alternative paths
+                alt_paths = [
+                    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'documents'),
+                    os.path.join(os.getcwd(), 'data', 'documents')
+                ]
+                for alt_path in alt_paths:
+                    if os.path.exists(alt_path):
+                        print(f"[DEBUG] Found alternative path: {alt_path}")
+                        data_dir = alt_path
+                        break
             print("✅ Text RAG system initialized")
         except Exception as e:
             print(f"❌ Text RAG initialization failed: {e}")
@@ -175,6 +209,77 @@ class EnhancedTestHarness:
             raise
         
         print(f"🎯 Setup complete! Available sources: {self._get_available_sources()}")
+        
+        # Run pre-flight validation
+        self._run_preflight_validation()
+    
+    def _run_preflight_validation(self):
+        """Run comprehensive pre-flight validation to ensure test environment is ready."""
+        print(f"\n🔍 RUNNING PRE-FLIGHT VALIDATION")
+        print(f"{'='*50}")
+        
+        validation_results = {
+            "text_rag_ready": False,
+            "salesforce_ready": False,
+            "orchestrator_ready": False,
+            "documents_loaded": False
+        }
+        
+        # Check Text RAG system
+        if self.rag_system:
+            try:
+                # Try a simple query to check if documents are loaded
+                test_result = self.rag_system.query("test query", max_chunks=1)
+                if test_result and test_result.get('chunks'):
+                    validation_results["text_rag_ready"] = True
+                    validation_results["documents_loaded"] = True
+                    print("✅ Text RAG: Ready with documents loaded")
+                else:
+                    print("⚠️ Text RAG: System ready but no documents loaded")
+            except Exception as e:
+                print(f"❌ Text RAG: Not ready - {e}")
+        else:
+            print("❌ Text RAG: Not initialized")
+        
+        # Check Salesforce connector
+        if self.salesforce_connector:
+            try:
+                # Test Salesforce connection
+                if hasattr(self.salesforce_connector, 'search_knowledge_realtime'):
+                    validation_results["salesforce_ready"] = True
+                    print("✅ Salesforce: Ready with correct interface")
+                else:
+                    print("❌ Salesforce: Missing search_knowledge_realtime method")
+            except Exception as e:
+                print(f"❌ Salesforce: Not ready - {e}")
+        else:
+            print("⚠️ Salesforce: Not initialized")
+        
+        # Check enhanced orchestrator
+        if self.enhanced_orchestrator:
+            validation_results["orchestrator_ready"] = True
+            print("✅ Enhanced Orchestrator: Ready")
+        else:
+            print("❌ Enhanced Orchestrator: Not initialized")
+        
+        # Summary
+        ready_count = sum(validation_results.values())
+        total_checks = len(validation_results)
+        
+        print(f"\n📊 PRE-FLIGHT VALIDATION SUMMARY:")
+        print(f"   Ready components: {ready_count}/{total_checks}")
+        print(f"   Text RAG documents: {'✅' if validation_results['documents_loaded'] else '❌'}")
+        print(f"   Salesforce interface: {'✅' if validation_results['salesforce_ready'] else '❌'}")
+        print(f"   Test environment: {'✅ READY' if ready_count >= 2 else '⚠️ PARTIAL' if ready_count >= 1 else '❌ NOT READY'}")
+        
+        if not validation_results["documents_loaded"]:
+            print(f"\n🚨 WARNING: No documents loaded in Text RAG!")
+            print(f"   This will cause the agentic system to always fallback to other sources.")
+            print(f"   Consider adding documents to improve test accuracy.")
+        
+        print(f"{'='*50}")
+        
+        return validation_results
     
     def run_single_comparison_test(self, query: str) -> ComparisonResult:
         """

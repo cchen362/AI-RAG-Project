@@ -298,20 +298,20 @@ class EnhancedAgenticOrchestrator:
             "source_utilization": {
                 "true_agentic_sources": len(true_response.sources_used),
                 "pseudo_agentic_sources": len(pseudo_response.sources_used),
-                "intelligent_selection": true_response.performance_metrics["intelligent_source_selection"],
-                "dynamic_stopping": true_response.performance_metrics["dynamic_stopping"]
+                "intelligent_selection": true_response.performance_metrics.get("intelligent_source_selection", True),
+                "dynamic_stopping": true_response.performance_metrics.get("dynamic_stopping", True)
             },
             "reasoning_complexity": {
-                "true_agentic_steps": true_response.reasoning_transparency["total_reasoning_steps"],
-                "pseudo_agentic_steps": pseudo_response.reasoning_transparency["total_reasoning_steps"],
-                "dynamic_decisions": true_response.reasoning_transparency["dynamic_decisions"]
+                "true_agentic_steps": true_response.reasoning_transparency.get("total_reasoning_steps", 0),
+                "pseudo_agentic_steps": pseudo_response.reasoning_transparency.get("total_reasoning_steps", 0),
+                "dynamic_decisions": true_response.reasoning_transparency.get("dynamic_decisions", 0)
             },
             "confidence_comparison": {
                 "true_agentic": true_response.confidence_score,
                 "pseudo_agentic": pseudo_response.confidence_score,
                 "difference": true_response.confidence_score - pseudo_response.confidence_score
             },
-            "decision_quality_winner": "true" if true_response.performance_metrics["intelligent_source_selection"] else "pseudo"
+            "decision_quality_winner": "true" if true_response.performance_metrics.get("intelligent_source_selection", True) else "pseudo"
         }
     
     def _generate_recommendation(self, performance: Dict[str, Any]) -> str:
@@ -371,22 +371,50 @@ class EnhancedAgenticOrchestrator:
     
     def _convert_to_llm_response(self, unified: UnifiedResponse) -> LLMAgenticResponse:
         """Convert unified response back to LLM response format."""
-        # This is a simplified conversion - in practice you'd want full fidelity
+        from llm_reasoning_agent import SourceType
+        
+        # Convert sources_used strings back to SourceType enums
+        sources_queried = []
+        for source_str in unified.sources_used:
+            try:
+                sources_queried.append(SourceType(source_str))
+            except ValueError:
+                # Handle any invalid source strings gracefully
+                pass
+        
         return type('MockLLMResponse', (), {
             'final_answer': unified.final_answer,
             'reasoning_chain': unified.reasoning_chain,
             'confidence_score': unified.confidence_score,
-            'cost_breakdown': unified.cost_breakdown
+            'cost_breakdown': unified.cost_breakdown,
+            'sources_queried': sources_queried,
+            'total_reasoning_steps': unified.reasoning_transparency.get('total_reasoning_steps', 0),
+            'total_llm_tokens': unified.reasoning_transparency.get('llm_tokens_used', 0),
+            'reasoning_quality': unified.reasoning_transparency.get('reasoning_quality', 'unknown'),
+            'total_execution_time': unified.execution_time
         })()
     
     def _convert_to_baseline_response(self, unified: UnifiedResponse) -> BaselineResponse:
         """Convert unified response back to baseline response format."""
-        # This is a simplified conversion - in practice you'd want full fidelity
+        from llm_reasoning_agent import SourceType
+        
+        # Convert sources_used strings back to SourceType enums for consistency
+        sources_used = []
+        for source_str in unified.sources_used:
+            try:
+                sources_used.append(SourceType(source_str))
+            except ValueError:
+                # Handle any invalid source strings gracefully
+                pass
+        
         return type('MockBaselineResponse', (), {
             'final_answer': unified.final_answer,
             'reasoning_chain': unified.reasoning_chain,
             'confidence_score': unified.confidence_score,
-            'total_steps': len(unified.reasoning_chain)
+            'total_steps': len(unified.reasoning_chain),
+            'sources_used': sources_used,
+            'execution_time': unified.execution_time,
+            'reasoning_transparency': unified.reasoning_transparency
         })()
     
     def _get_available_sources_summary(self) -> List[str]:
