@@ -128,11 +128,11 @@ class Graph_R1_Validator:
             
             # Test queries that should now work
             test_queries = [
-                "artificial intelligence",
-                "machine learning", 
-                "transformers",
-                "RAG systems",
-                "help me understand neural networks"
+                "booking process",
+                "travel policy", 
+                "customer service",
+                "support procedures",
+                "help me understand cancellation policy"
             ]
             
             success_count = 0
@@ -172,7 +172,7 @@ class Graph_R1_Validator:
                     str(Path(self.temp_dir) / "travel_content.txt")
                 ],
                 'visual_documents': [],  # No visual docs for this test
-                'salesforce_queries': ['artificial intelligence', 'machine learning']
+                'salesforce_queries': ['booking', 'travel', 'customer service', 'support']
             }
             
             # Create hypergraph constructor

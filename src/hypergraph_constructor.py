@@ -504,12 +504,53 @@ class HypergraphBuilder:
                 # Create document-level node
                 doc_node_id = f"visual_doc_{hashlib.md5(doc_path.encode()).hexdigest()[:8]}"
                 
-                # Use average of page embeddings for document-level embedding
+                # Use average of all patches for document-level embedding
                 page_embeddings = visual_result['embeddings']
-                if hasattr(page_embeddings, 'mean'):
-                    doc_embedding = page_embeddings.mean(dim=0).cpu().numpy()
+                
+                # Average all patches to single vector for document representation
+                logger.info(f"🔍 Input page_embeddings shape: {page_embeddings.shape}, type: {type(page_embeddings)}")
+                
+                # CRITICAL: Preserve ColPali patch structure for MaxSim scoring
+                # ColPali uses late interaction - each patch (128D) needs to be compared individually
+                # NOT averaged! This preserves spatial information for visual understanding.
+                
+                if hasattr(page_embeddings, 'cpu'):
+                    # Handle torch tensors
+                    if len(page_embeddings.shape) == 3:
+                        # Shape: [batch, num_patches, embed_dim] → [num_patches, embed_dim]
+                        patches = page_embeddings.squeeze(0).cpu().numpy()  # Remove batch, keep patches
+                        logger.info(f"🔧 Torch tensor (3D) preserving patches: {page_embeddings.shape} → {patches.shape}")
+                    elif len(page_embeddings.shape) == 2:
+                        # Shape: [num_patches, embed_dim] - already correct
+                        patches = page_embeddings.cpu().numpy()
+                        logger.info(f"🔧 Torch tensor (2D) preserving patches: {page_embeddings.shape} → {patches.shape}")
+                    else:
+                        logger.error(f"❌ Unexpected tensor shape: {page_embeddings.shape}")
+                        continue
                 else:
-                    doc_embedding = np.mean(page_embeddings, axis=0)
+                    # Handle numpy arrays
+                    if len(page_embeddings.shape) == 3:
+                        # Shape: [batch, num_patches, embed_dim] → [num_patches, embed_dim]
+                        patches = page_embeddings.squeeze(0)  # Remove batch, keep patches
+                        logger.info(f"🔧 Numpy array (3D) preserving patches: {page_embeddings.shape} → {patches.shape}")
+                    elif len(page_embeddings.shape) == 2:
+                        # Shape: [num_patches, embed_dim] - already correct
+                        patches = page_embeddings
+                        logger.info(f"🔧 Numpy array (2D) preserving patches: {page_embeddings.shape} → {patches.shape}")
+                    else:
+                        logger.error(f"❌ Unexpected array shape: {page_embeddings.shape}")
+                        continue
+                
+                # For graph embedding, use centroid of patches as representative embedding
+                # But store full patch data for MaxSim scoring when needed
+                doc_embedding = np.mean(patches, axis=0)  # Centroid for graph connectivity
+                logger.info(f"🔧 Document centroid embedding: {doc_embedding.shape}")
+                
+                # Validate embedding shape before projection
+                if hasattr(doc_embedding, 'shape') and len(doc_embedding.shape) != 1:
+                    logger.error(f"❌ Invalid document embedding shape: {doc_embedding.shape}, expected 1D")
+                    logger.error(f"❌ Original embeddings shape: {page_embeddings.shape}")
+                    continue
                 
                 # Project to unified space (128D → 512D)
                 unified_embedding = self.unified_space.project_to_unified_space(doc_embedding, 'visual')
@@ -523,7 +564,10 @@ class HypergraphBuilder:
                         'filename': filename,
                         'file_path': doc_path,
                         'page_count': visual_result['metadata']['page_count'],
-                        'document_type': 'visual'
+                        'document_type': 'visual',
+                        'patch_embeddings': patches,  # Store original patches for MaxSim scoring
+                        'patch_count': patches.shape[0],
+                        'patch_dimension': patches.shape[1]
                     },
                     hierarchical_level=0  # Document level
                 )
@@ -534,28 +578,18 @@ class HypergraphBuilder:
                 
                 # Create page-level nodes
                 page_count = visual_result['metadata']['page_count']
+                logger.info(f"📄 Creating {page_count} page nodes from document patches")
+                
+                # For ColPali, all patches are concatenated - we need to split by pages
+                # or use the document-level embedding for all pages (simpler approach)
                 for page_idx in range(page_count):
                     page_node_id = f"visual_page_{doc_node_id}_{page_idx}"
                     
-                    # Extract and average page embedding patches to single vector
-                    if hasattr(page_embeddings, 'shape') and len(page_embeddings.shape) > 1:
-                        # Get patches for this page
-                        page_patches = page_embeddings[page_idx]
-                        
-                        # Average patches to single vector (747, 512) → (512,)
-                        if hasattr(page_patches, 'mean'):
-                            page_embedding = page_patches.mean(dim=0).cpu().numpy()
-                        else:
-                            page_embedding = np.mean(page_patches, axis=0)
-                            
-                        logger.debug(f"📐 Page {page_idx} patches {page_patches.shape} → embedding {page_embedding.shape}")
-                    else:
-                        page_embedding = page_embeddings  # Single page case
+                    # For now, use the same document-level embedding for all pages
+                    # This maintains consistency until we can properly split patches by page
+                    page_embedding = doc_embedding.copy()  # Use the already-averaged document embedding
                     
-                    # Validate embedding shape before projection
-                    if hasattr(page_embedding, 'shape') and len(page_embedding.shape) != 1:
-                        logger.error(f"❌ Invalid page embedding shape: {page_embedding.shape}, expected 1D")
-                        continue
+                    logger.debug(f"📐 Page {page_idx} using document-level embedding: {page_embedding.shape}")
                     
                     # Project to unified space
                     unified_page_embedding = self.unified_space.project_to_unified_space(page_embedding, 'visual')
@@ -570,7 +604,10 @@ class HypergraphBuilder:
                             'file_path': doc_path,
                             'page_index': page_idx,
                             'page_number': page_idx + 1,
-                            'parent_document': doc_node_id
+                            'parent_document': doc_node_id,
+                            'patch_embeddings': patches,  # Share patches across pages for now
+                            'patch_count': patches.shape[0],
+                            'patch_dimension': patches.shape[1]
                         },
                         hierarchical_level=1,  # Page level
                         parent_node_id=doc_node_id

@@ -364,6 +364,13 @@ Be concise and practical."""
                 threshold_multiplier = 0.3 if source_type in source_priority[:2] else 0.5
                 required_similarity = min_similarity * threshold_multiplier
                 
+                # Special handling for visual sources - accept negative similarities for visual queries
+                visual_query_detected = any(word in query.lower() for word in ['chart', 'graph', 'diagram', 'image', 'visual', 'figure', 'table', 'based on the'])
+                if source_type == 'visual' and visual_query_detected:
+                    # For visual queries, accept any visual content even with negative similarity
+                    required_similarity = -0.2  # Much lower threshold for visual content
+                    logger.info(f"🎯 Visual query detected, using relaxed threshold {required_similarity:.3f} for visual content")
+                
                 if best_for_source and best_similarity >= required_similarity:
                     entry_points.append(best_for_source['node_id'])
                     sources_used.add(source_type)

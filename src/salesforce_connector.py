@@ -955,6 +955,121 @@ Your response should:
             'recommendation': 'Use intent-driven search' if intent_avg > old_avg or intent_high_quality > old_high_quality else 'Old method performed better'
         }
         
+    def search_knowledge_semantic(self, query: str, limit: int = 5) -> List[Dict]:
+        """
+        Semantic content search in article titles and bodies.
+        This handles general queries that don't match travel-specific patterns.
+        """
+        if not self.sf:
+            if not self.authenticate():
+                return []
+        
+        self.logger.info(f"🔍 Semantic content search for: {query}")
+        
+        try:
+            # Extract business-relevant terms from the query
+            business_terms = self.extract_business_terms(query)
+            
+            # Fallback to simple word extraction if no business terms found
+            if not business_terms:
+                words = query.lower().split()
+                business_terms = [word.strip('.,!?') for word in words 
+                                if len(word) > 2 and word not in ['the', 'and', 'for', 'with', 'how', 'what', 'when', 'where']]
+            
+            if not business_terms:
+                self.logger.warning(f"No meaningful terms extracted from query: {query}")
+                return []
+            
+            self.logger.info(f"🔍 Searching for business terms: {business_terms}")
+            
+            # Build search conditions for titles only (Article_Body__c cannot be filtered)
+            search_conditions = []
+            
+            # Search in titles for each business term
+            for term in business_terms:
+                # Handle multi-word terms by searching for individual words
+                if ' ' in term:
+                    words = term.split()
+                    for word in words:
+                        search_conditions.append(f"Title LIKE '%{word}%'")
+                else:
+                    search_conditions.append(f"Title LIKE '%{term}%'")
+            
+            # Execute semantic search (title-only due to Salesforce limitations)
+            semantic_query = f"""
+                SELECT Id, Title, Article_Body__c
+                FROM Knowledge__kav 
+                WHERE PublishStatus = 'Online'
+                AND Language = 'en_US'
+                AND RecordType.Name = 'Product Documentation'
+                AND ({' OR '.join(search_conditions)})
+                ORDER BY LastModifiedDate DESC
+                LIMIT {limit * 2}
+            """
+            
+            self.logger.info(f"Executing semantic search with {len(search_conditions)} conditions")
+            result = self.sf.query(semantic_query)
+            
+            if result['records']:
+                self.logger.info(f"✅ Semantic search found {len(result['records'])} articles")
+                
+                # Process results and score relevance (title-only)
+                scored_results = []
+                for article in result['records']:
+                    title = article.get('Title', '').lower()
+                    
+                    # Calculate relevance score based on business term matches in title
+                    title_score = 0
+                    for term in business_terms:
+                        if ' ' in term:
+                            # Multi-word terms: check if all words are present
+                            words = term.split()
+                            if all(word in title for word in words):
+                                title_score += 2  # Higher score for multi-word matches
+                        else:
+                            # Single word terms
+                            if term in title:
+                                title_score += 1
+                    
+                    if title_score > 0:  # Only include articles with actual matches
+                        scored_results.append({
+                            'article': article,
+                            'score': title_score,
+                            'title_matches': title_score,
+                            'body_matches': 0  # Cannot search body content
+                        })
+                
+                # Sort by relevance score and return top results
+                scored_results.sort(key=lambda x: x['score'], reverse=True)
+                final_results = []
+                
+                for scored in scored_results[:limit]:
+                    article = scored['article']
+                    
+                    processed_article = {
+                        'Id': article['Id'],
+                        'Title': article['Title'],
+                        'content': article.get('Article_Body__c', ''),
+                        'relevance_score': scored['score'],
+                        'search_method': 'semantic_content',
+                        'match_details': {
+                            'title_matches': scored['title_matches'],
+                            'body_matches': scored['body_matches']
+                        }
+                    }
+                    
+                    final_results.append(processed_article)
+                
+                self.logger.info(f"✅ Returning {len(final_results)} semantically relevant articles")
+                return final_results
+            else:
+                self.logger.info(f"⚠️ Semantic search found no articles for: {query}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"❌ Semantic search failed: {e}")
+            return []
+
     def search_knowledge_with_intent(self, query: str, limit: int = 5) -> List[Dict]:
         """
         NEW: Intent-driven search that prioritizes both action and service type.
@@ -1359,17 +1474,93 @@ Your response should:
         self.logger.info(f"Intent extraction test: {results['successful_extractions']}/{len(test_queries)} successful")
         return results
     
+    def extract_business_terms(self, query: str) -> List[str]:
+        """
+        Extract business-relevant search terms from user queries.
+        Maps common user language to knowledge base terminology.
+        """
+        query_lower = query.lower()
+        extracted_terms = []
+        
+        # Core business domain mappings
+        business_mappings = {
+            # Booking and reservations
+            'booking': ['book', 'reserve', 'reservation', 'make booking', 'create booking'],
+            'cancellation': ['cancel', 'cancelling', 'cancelled', 'void', 'refund'],
+            'modification': ['change', 'modify', 'update', 'amend', 'edit', 'alter'],
+            
+            # Travel services
+            'travel': ['trip', 'journey', 'itinerary', 'travel'],
+            'flight': ['air', 'airline', 'aviation', 'plane', 'flying'],
+            'hotel': ['accommodation', 'room', 'lodging', 'stay', 'check-in', 'check-out'],
+            'car rental': ['car', 'vehicle', 'rental', 'auto'],
+            
+            # Customer service
+            'customer service': ['help', 'support', 'assistance', 'service', 'agent'],
+            'complaint': ['problem', 'issue', 'angry', 'unhappy', 'escalate', 'complaint'],
+            'policy': ['rule', 'guideline', 'procedure', 'process', 'policy'],
+            
+            # Common business operations
+            'refund': ['money back', 'reimbursement', 'compensation'],
+            'fee': ['charge', 'cost', 'price', 'payment', 'billing'],
+            'documentation': ['document', 'form', 'paperwork', 'ticket'],
+            'schedule': ['time', 'timing', 'when', 'availability']
+        }
+        
+        # Extract terms based on detected keywords
+        for business_term, keywords in business_mappings.items():
+            if any(keyword in query_lower for keyword in keywords):
+                extracted_terms.append(business_term)
+        
+        # Add original query words that might be business-relevant
+        query_words = [word.strip('.,!?') for word in query_lower.split() 
+                      if len(word) > 2 and word not in ['the', 'and', 'for', 'with', 'how', 'what', 'when', 'where', 'can', 'will']]
+        
+        # Filter for likely business terms
+        business_keywords = [
+            'expense', 'receipt', 'approval', 'manager', 'supervisor', 'corporate',
+            'company', 'business', 'employee', 'traveler', 'guest', 'customer',
+            'urgent', 'emergency', 'late', 'delayed', 'missed', 'no-show'
+        ]
+        
+        for word in query_words:
+            if word in business_keywords or len(word) > 5:  # Longer words might be business-specific
+                extracted_terms.append(word)
+        
+        # Remove duplicates and return
+        unique_terms = list(set(extracted_terms))
+        self.logger.info(f"🔍 Extracted business terms from '{query}': {unique_terms}")
+        
+        return unique_terms[:8]  # Limit to prevent overly broad searches
+
     def search_knowledge_base(self, query: str, limit: int = 5) -> Dict[str, any]:
         """
         Main interface method for Graph-R1 hypergraph constructor.
-        Returns results in the expected format with success flag.
+        Enhanced with dynamic query mapping for 700+ article knowledge base.
         """
         try:
-            # Use the enhanced intent-driven search
+            # Extract business terms to guide search strategy
+            business_terms = self.extract_business_terms(query)
+            self.logger.info(f"🔍 Business terms for search strategy: {business_terms}")
+            
+            # Strategy 1: Try semantic content search first (enhanced with business terms)
+            results = self.search_knowledge_semantic(query, limit)
+            
+            if results:
+                self.logger.info(f"✅ search_knowledge_base found {len(results)} results via semantic search for: {query}")
+                return {
+                    'success': True,
+                    'results': results,
+                    'query': query,
+                    'method': 'semantic_content_search'
+                }
+            
+            # Strategy 2: Fallback to intent-driven search (for travel queries)
+            self.logger.info(f"🔄 Trying intent-driven search as fallback for: {query}")
             results = self.search_knowledge_with_intent(query, limit)
             
             if results:
-                self.logger.info(f"✅ search_knowledge_base found {len(results)} results for: {query}")
+                self.logger.info(f"✅ search_knowledge_base found {len(results)} results via intent search for: {query}")
                 return {
                     'success': True,
                     'results': results,
@@ -1382,7 +1573,7 @@ Your response should:
                     'success': True,
                     'results': [],
                     'query': query,
-                    'method': 'intent_driven_search',
+                    'method': 'both_searches_attempted',
                     'reason': 'no_relevant_content_found'
                 }
                 
@@ -1393,7 +1584,7 @@ Your response should:
                 'results': [],
                 'query': query,
                 'error': str(e),
-                'method': 'intent_driven_search'
+                'method': 'search_error'
             }
 
     def demonstrate_improvements(self, demo_queries: List[str] = None) -> Dict[str, any]:

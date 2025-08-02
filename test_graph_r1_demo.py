@@ -203,7 +203,7 @@ class GraphR1Demo:
         st.sidebar.write("**Salesforce Knowledge Base:**")
         sf_queries = st.sidebar.text_area(
             "Query terms (one per line)",
-            value="artificial intelligence\nmachine learning\ntransformers\nRAG systems",
+            value="booking\ntravel\ncustomer service\npolicy\nprocedure\nsupport\ncancellation\nmodification\ncheck-in\nrefund",
             key="sf_queries"
         )
         
