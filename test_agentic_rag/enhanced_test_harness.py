@@ -91,9 +91,9 @@ class EnhancedTestHarness:
         Args:
             init_colpali: Whether to initialize ColPali (slow, skip for quick testing)
         """
-        print("\n🔧 Setting up enhanced RAG components...")
+        print("\n[INIT] Setting up enhanced RAG components...")
         
-        # Initialize Text RAG system
+        # Initialize Text RAG system with production-compatible configuration
         try:
             text_config = {
                 'chunk_size': 1000,
@@ -101,80 +101,172 @@ class EnhancedTestHarness:
                 'embedding_model': 'openai',
                 'generation_model': 'gpt-3.5-turbo',
                 'max_retrieved_chunks': 5,
-                'temperature': 0.1
+                'temperature': 0.1,
+                'retrieval_mode': 'text',  # Ensure text mode is used
+                'enable_synthesis': True   # Enable LLM synthesis
             }
             self.rag_system = RAGSystem(text_config)
+            print(f"[DEBUG] RAG system created with config: {text_config}")
+            print(f"[DEBUG] RAG system initialized: {getattr(self.rag_system, 'is_initialized', 'Unknown')}")
+            print(f"[DEBUG] RAG system has vector_db: {hasattr(self.rag_system, 'vector_db')}")
+            print(f"[DEBUG] RAG system has embedding_manager: {hasattr(self.rag_system, 'embedding_manager')}")
             
-            # Process documents with enhanced debugging
-            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'documents')
-            print(f"[DEBUG] Document directory path: {data_dir}")
-            print(f"[DEBUG] Directory exists: {os.path.exists(data_dir)}")
-            
-            if os.path.exists(data_dir):
-                print(f"[INIT] Processing documents from {data_dir}")
-                all_files = os.listdir(data_dir)
-                print(f"[DEBUG] All files in directory: {all_files}")
-                
-                doc_files = [os.path.join(data_dir, f) for f in all_files 
-                           if f.endswith(('.txt', '.pdf', '.docx'))]
-                print(f"[DEBUG] Filtered document files: {doc_files}")
-                
-                if doc_files:
-                    print(f"[INIT] Attempting to process {len(doc_files)} documents...")
-                    try:
-                        result = self.rag_system.add_documents(doc_files)
-                        docs_processed = result.get('documents_processed', 0)
-                        vectors_count = getattr(self.rag_system.embedding_manager, 'get_vector_count', lambda: 0)()
-                        print(f"✅ Text RAG: Processed {docs_processed} documents, {vectors_count} vectors created")
-                        
-                        # Verify documents are actually loaded
-                        if docs_processed == 0 or vectors_count == 0:
-                            print(f"⚠️ WARNING: Document processing may have failed - processed: {docs_processed}, vectors: {vectors_count}")
-                    except Exception as doc_error:
-                        print(f"❌ Document processing error: {doc_error}")
-                        print(f"[DEBUG] RAG system state: {self.rag_system}")
-                else:
-                    print(f"⚠️ No valid document files found in {data_dir}")
-                    print(f"[DEBUG] Supported extensions: .txt, .pdf, .docx")
-            else:
-                print(f"❌ Document directory not found: {data_dir}")
-                # Try alternative paths
-                alt_paths = [
+            # Process documents with enhanced debugging and better path resolution
+            def find_documents_directory():
+                """Find the correct documents directory with multiple fallback options."""
+                potential_paths = [
+                    # Primary path (from test_agentic_rag directory)
+                    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'documents'),
+                    # Alternative paths
                     os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'documents'),
-                    os.path.join(os.getcwd(), 'data', 'documents')
+                    os.path.join(os.getcwd(), 'data', 'documents'),
+                    # Direct path based on debug logs
+                    r'C:\Users\cchen362\OneDrive\Desktop\AI-RAG-Project\data\documents',
+                    # Additional fallbacks
+                    os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'documents'),
+                    os.path.join(os.path.dirname(__file__), '..', 'data', 'documents')
                 ]
-                for alt_path in alt_paths:
-                    if os.path.exists(alt_path):
-                        print(f"[DEBUG] Found alternative path: {alt_path}")
-                        data_dir = alt_path
-                        break
-            print("✅ Text RAG system initialized")
+                
+                for path in potential_paths:
+                    abs_path = os.path.abspath(path)
+                    print(f"[DEBUG] Checking path: {abs_path}")
+                    if os.path.exists(abs_path):
+                        print(f"[DEBUG] [SUCCESS] Found valid path: {abs_path}")
+                        return abs_path
+                    else:
+                        print(f"[DEBUG] [FAIL] Path not found: {abs_path}")
+                
+                return None
+            
+            data_dir = find_documents_directory()
+            
+            if data_dir:
+                print(f"[INIT] Processing documents from: {data_dir}")
+                try:
+                    all_files = os.listdir(data_dir)
+                    print(f"[DEBUG] All files in directory: {all_files}")
+                    
+                    doc_files = [os.path.join(data_dir, f) for f in all_files 
+                               if f.endswith(('.txt', '.pdf', '.docx'))]
+                    print(f"[DEBUG] Filtered document files: {doc_files}")
+                    
+                    if doc_files:
+                        print(f"[INIT] Attempting to process {len(doc_files)} documents...")
+                        try:
+                            result = self.rag_system.add_documents(doc_files)
+                            # Check for successful documents using correct key
+                            docs_processed = len(result.get('successful', [])) if result.get('successful') else result.get('documents_processed', 0)
+                            
+                            # Production-compatible vector count detection
+                            try:
+                                print(f"[DEBUG] Checking vector count with production architecture...")
+                                
+                                # Check the production RAG system vector_db first
+                                if hasattr(self.rag_system, 'vector_db') and hasattr(self.rag_system.vector_db, 'index'):
+                                    vectors_count = self.rag_system.vector_db.index.ntotal
+                                    print(f"[DEBUG] Used vector_db.index.ntotal: {vectors_count}")
+                                elif hasattr(self.rag_system, 'vector_db'):
+                                    print(f"[DEBUG] vector_db exists but no index attribute")
+                                    print(f"[DEBUG] vector_db methods: {[m for m in dir(self.rag_system.vector_db) if not m.startswith('_')]}")
+                                    vectors_count = "no_index_found"
+                                # Fallback to embedding manager approaches
+                                elif hasattr(self.rag_system.embedding_manager, 'get_vector_count'):
+                                    vectors_count = self.rag_system.embedding_manager.get_vector_count()
+                                    print(f"[DEBUG] Used embedding_manager.get_vector_count(): {vectors_count}")
+                                elif hasattr(self.rag_system.embedding_manager, 'vector_store'):
+                                    vector_store = self.rag_system.embedding_manager.vector_store
+                                    print(f"[DEBUG] Vector store type: {type(vector_store)}")
+                                    
+                                    if hasattr(vector_store, 'ntotal'):
+                                        vectors_count = vector_store.ntotal
+                                        print(f"[DEBUG] Used ntotal: {vectors_count}")
+                                    elif hasattr(vector_store, 'index') and hasattr(vector_store.index, 'ntotal'):
+                                        vectors_count = vector_store.index.ntotal
+                                        print(f"[DEBUG] Used index.ntotal: {vectors_count}")
+                                    else:
+                                        vectors_count = "no_count_method"
+                                        print(f"[DEBUG] Vector store methods: {[m for m in dir(vector_store) if not m.startswith('_')]}")
+                                else:
+                                    vectors_count = "no_vector_store"
+                                    print(f"[DEBUG] RAG system methods: {[m for m in dir(self.rag_system) if not m.startswith('_')]}")
+                                    
+                            except Exception as ve:
+                                vectors_count = f"error: {str(ve)}"
+                                print(f"[DEBUG] Vector count error: {ve}")
+                            
+                            print(f"[SUCCESS] Text RAG: Processed {docs_processed} documents, {vectors_count} vectors created")
+                            
+                            # Enhanced verification
+                            if docs_processed == 0:
+                                print(f"[CRITICAL] No documents were processed successfully!")
+                                print(f"[DEBUG] Result details: {result}")
+                            elif vectors_count == 0 or vectors_count == "unknown":
+                                print(f"[WARNING] Vector count is {vectors_count} - document indexing may have failed")
+                            else:
+                                print(f"[SUCCESS] Document processing completed successfully!")
+                                
+                        except Exception as doc_error:
+                            print(f"[ERROR] Document processing error: {doc_error}")
+                            print(f"[DEBUG] Error type: {type(doc_error)}")
+                            print(f"[DEBUG] RAG system state: {self.rag_system}")
+                            import traceback
+                            print(f"[DEBUG] Full traceback: {traceback.format_exc()}")
+                    else:
+                        print(f"[WARNING] No valid document files found in {data_dir}")
+                        print(f"[DEBUG] Supported extensions: .txt, .pdf, .docx")
+                        print(f"[DEBUG] Available files: {all_files}")
+                        
+                except Exception as list_error:
+                    print(f"[ERROR] Error listing directory contents: {list_error}")
+                    print(f"[DEBUG] Directory: {data_dir}")
+            else:
+                print(f"[CRITICAL] Could not find documents directory in any expected location!")
+                print(f"[DEBUG] Please ensure documents exist in one of these locations:")
+                print(f"  - AI-RAG-Project/data/documents/")
+                print(f"  - Current working directory: {os.getcwd()}")
+                
+                # Set documents_loaded flag for validation
+                setattr(self, '_documents_loaded', False)
+            print("[SUCCESS] Text RAG system initialized")
         except Exception as e:
-            print(f"❌ Text RAG initialization failed: {e}")
+            print(f"[ERROR] Text RAG initialization failed: {e}")
             self.rag_system = None
         
-        # Initialize ColPali (conditional)
+        # Initialize ColPali (conditional) with production-compatible config
         if init_colpali:
             try:
-                self.colpali_retriever = ColPaliRetriever()
-                print("✅ ColPali visual retriever initialized")
+                colpali_config = {
+                    'model_name': 'vidore/colqwen2-v1.0',
+                    'device': 'auto',
+                    'max_pages_per_doc': 50,
+                    'cache_embeddings': True,
+                    'cache_dir': 'cache/embeddings'
+                }
+                self.colpali_retriever = ColPaliRetriever(colpali_config)
+                print("[SUCCESS] ColPali visual retriever initialized with production config")
             except Exception as e:
-                print(f"⚠️ ColPali initialization failed: {e}")
-                self.colpali_retriever = None
+                print(f"[WARNING] ColPali initialization failed: {e}")
+                print(f"[DEBUG] Trying without config parameter as fallback...")
+                try:
+                    self.colpali_retriever = ColPaliRetriever()
+                    print("[SUCCESS] ColPali initialized with fallback method")
+                except Exception as e2:
+                    print(f"[ERROR] ColPali fallback also failed: {e2}")
+                    self.colpali_retriever = None
         else:
-            print("⏸️ ColPali initialization skipped for faster testing")
+            print("[SKIP] ColPali initialization skipped for faster testing")
             self.colpali_retriever = None
         
         # Initialize Salesforce connector
         try:
             self.salesforce_connector = SalesforceConnector()
             if self.salesforce_connector.test_connection():
-                print("✅ Salesforce connector initialized and tested")
+                print("[SUCCESS] Salesforce connector initialized and tested")
             else:
-                print("⚠️ Salesforce connection test failed")
+                print("[WARNING] Salesforce connection test failed")
                 self.salesforce_connector = None
         except Exception as e:
-            print(f"⚠️ Salesforce initialization failed: {e}")
+            print(f"[WARNING] Salesforce initialization failed: {e}")
             self.salesforce_connector = None
         
         # Initialize re-ranker
@@ -184,12 +276,12 @@ class EnhancedTestHarness:
                 relevance_threshold=0.3
             )
             if self.reranker.initialize():
-                print("✅ BGE re-ranker initialized")
+                print("[SUCCESS] BGE re-ranker initialized")
             else:
-                print("⚠️ Re-ranker initialization failed")
+                print("[WARNING] Re-ranker initialization failed")
                 self.reranker = None
         except Exception as e:
-            print(f"⚠️ Re-ranker initialization failed: {e}")
+            print(f"[WARNING] Re-ranker initialization failed: {e}")
             self.reranker = None
         
         # Initialize enhanced orchestrator
@@ -203,19 +295,74 @@ class EnhancedTestHarness:
                 enable_cost_monitoring=self.config.get("enable_cost_monitoring", True),
                 enable_logging=self.config.get("enable_detailed_logging", True)
             )
-            print("✅ Enhanced Agentic Orchestrator initialized")
+            print("[SUCCESS] Enhanced Agentic Orchestrator initialized")
         except Exception as e:
-            print(f"❌ Enhanced orchestrator initialization failed: {e}")
+            print(f"[ERROR] Enhanced orchestrator initialization failed: {e}")
             raise
         
-        print(f"🎯 Setup complete! Available sources: {self._get_available_sources()}")
+        print(f"[SETUP] Setup complete! Available sources: {self._get_available_sources()}")
         
-        # Run pre-flight validation
-        self._run_preflight_validation()
+        # Run enhanced validation to verify document loading
+        self._run_enhanced_preflight_validation()
+    
+    def _run_enhanced_preflight_validation(self):
+        """Enhanced validation with detailed document loading verification."""
+        print(f"\n[VALIDATION] RUNNING ENHANCED PRE-FLIGHT VALIDATION")
+        print(f"{'='*60}")
+        
+        # Test Text RAG with simple queries
+        if self.rag_system:
+            try:
+                test_queries = [
+                    "transformer",
+                    "attention mechanism", 
+                    "neural network"
+                ]
+                
+                for query in test_queries:
+                    result = self.rag_system.query(query)
+                    chunks = result.get('chunks', []) if isinstance(result, dict) else []
+                    success = result.get('success', False) if isinstance(result, dict) else False
+                    
+                    print(f"[TEST] Query '{query}': {len(chunks)} chunks, success: {success}")
+                    if not success and isinstance(result, dict):
+                        print(f"[ERROR] Query failed: {result.get('error', 'Unknown error')}")
+                    
+                    if len(chunks) > 0:
+                        print(f"[SUCCESS] Document loading appears to be working!")
+                        break
+                else:
+                    print(f"[WARNING] No queries returned data - documents may not be properly loaded")
+                    
+            except Exception as e:
+                print(f"[ERROR] Text RAG validation failed: {e}")
+        
+        # Test orchestration with simple query
+        if hasattr(self, 'enhanced_orchestrator'):
+            try:
+                print(f"\n[TEST] Testing orchestration with simple query...")
+                test_query = "What is attention mechanism?"
+                findings = self.enhanced_orchestrator.llm_agent.orchestrate_retrieval(test_query)
+                
+                print(f"[RESULT] Orchestration test:")
+                print(f"   Sources queried: {[s.value for s in findings.sources_queried]}")
+                print(f"   Text chunks: {len(findings.text_chunks)}")
+                print(f"   Insufficient data: {findings.insufficient_data}")
+                print(f"   Confidence: {findings.confidence_assessment}")
+                
+                if not findings.insufficient_data:
+                    print(f"[SUCCESS] Orchestration is working correctly!")
+                else:
+                    print(f"[WARNING] Orchestration reports insufficient data")
+                    
+            except Exception as e:
+                print(f"[ERROR] Orchestration validation failed: {e}")
+        
+        print(f"{'='*60}")
     
     def _run_preflight_validation(self):
         """Run comprehensive pre-flight validation to ensure test environment is ready."""
-        print(f"\n🔍 RUNNING PRE-FLIGHT VALIDATION")
+        print(f"\n[VALIDATION] RUNNING PRE-FLIGHT VALIDATION")
         print(f"{'='*50}")
         
         validation_results = {
@@ -237,9 +384,9 @@ class EnhancedTestHarness:
                 else:
                     print("⚠️ Text RAG: System ready but no documents loaded")
             except Exception as e:
-                print(f"❌ Text RAG: Not ready - {e}")
+                print(f"[ERROR] Text RAG: Not ready - {e}")
         else:
-            print("❌ Text RAG: Not initialized")
+            print("[ERROR] Text RAG: Not initialized")
         
         # Check Salesforce connector
         if self.salesforce_connector:
@@ -247,20 +394,20 @@ class EnhancedTestHarness:
                 # Test Salesforce connection
                 if hasattr(self.salesforce_connector, 'search_knowledge_realtime'):
                     validation_results["salesforce_ready"] = True
-                    print("✅ Salesforce: Ready with correct interface")
+                    print("[SUCCESS] Salesforce: Ready with correct interface")
                 else:
-                    print("❌ Salesforce: Missing search_knowledge_realtime method")
+                    print("[ERROR] Salesforce: Missing search_knowledge_realtime method")
             except Exception as e:
-                print(f"❌ Salesforce: Not ready - {e}")
+                print(f"[ERROR] Salesforce: Not ready - {e}")
         else:
-            print("⚠️ Salesforce: Not initialized")
+            print("[WARNING] Salesforce: Not initialized")
         
         # Check enhanced orchestrator
         if self.enhanced_orchestrator:
             validation_results["orchestrator_ready"] = True
-            print("✅ Enhanced Orchestrator: Ready")
+            print("[SUCCESS] Enhanced Orchestrator: Ready")
         else:
-            print("❌ Enhanced Orchestrator: Not initialized")
+            print("[ERROR] Enhanced Orchestrator: Not initialized")
         
         # Summary
         ready_count = sum(validation_results.values())
@@ -672,7 +819,7 @@ class EnhancedTestHarness:
         
         print(f"\n🎯 Validation Status: {validation['status'].upper()}")
         
-        print(f"\n🔍 Key Findings:")
+        print(f"\n[FINDINGS] Key Findings:")
         for finding in validation["key_findings"]:
             print(f"   {finding}")
         

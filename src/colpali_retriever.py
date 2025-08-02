@@ -47,6 +47,7 @@ class RetrievalResult:
 class RetrievalMetrics:
     def __init__(self, query_time: float, total_results: int, avg_score: float, max_score: float, tokens_used: int, cost_estimate: float):
         self.query_time = query_time
+        self.search_time = query_time  # Alias for compatibility with other components
         self.total_results = total_results
         self.avg_score = avg_score
         self.max_score = max_score

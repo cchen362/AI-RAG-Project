@@ -753,18 +753,80 @@ Your response should:
             if any(keyword in query_lower for keyword in keywords):
                 detected_context.append(context)
         
-        intent = {
-            'action': detected_action,
-            'service': detected_service,
-            'context': detected_context,
-            'is_valid': detected_action is not None and detected_service is not None,
-            'original_query': query,
-            'confidence': self._calculate_intent_confidence(detected_action, detected_service, query_lower),
-            'scenario_detected': True if detected_action == 'handle' and any(s in query_lower for s in scenario_actions['handle']) else False
-        }
+        # Check if this is a general knowledge query (not travel-specific)
+        is_general_knowledge = self._is_general_knowledge_query(query_lower)
+        
+        # For general knowledge queries, we don't need specific actions/services
+        if is_general_knowledge:
+            intent = {
+                'action': 'search',  # Default action for general queries
+                'service': 'knowledge',  # Default service for general queries
+                'context': detected_context if detected_context else ['general_inquiry'],
+                'is_valid': True,  # General knowledge queries are always valid
+                'original_query': query,
+                'confidence': 0.8,  # High confidence for general queries
+                'scenario_detected': False,
+                'query_type': 'general_knowledge'
+            }
+        else:
+            # Original logic for travel-specific queries
+            intent = {
+                'action': detected_action,
+                'service': detected_service,
+                'context': detected_context,
+                'is_valid': detected_action is not None and detected_service is not None,
+                'original_query': query,
+                'confidence': self._calculate_intent_confidence(detected_action, detected_service, query_lower),
+                'scenario_detected': True if detected_action == 'handle' and any(s in query_lower for s in scenario_actions['handle']) else False,
+                'query_type': 'travel_specific'
+            }
         
         self.logger.info(f"Enhanced intent extraction: {intent}")
         return intent
+    
+    def _is_general_knowledge_query(self, query_lower: str) -> bool:
+        """Detect if this is a general knowledge query rather than travel-specific."""
+        # General knowledge indicators
+        general_keywords = [
+            # Technology/AI terms
+            'artificial intelligence', 'ai', 'machine learning', 'ml', 'transformers', 
+            'neural network', 'deep learning', 'algorithm', 'model', 'architecture',
+            'rag', 'retrieval', 'embedding', 'vector', 'database', 'llm', 'gpt',
+            'colpali', 'vision', 'nlp', 'computer vision', 'data science',
+            
+            # Business/general terms
+            'analysis', 'strategy', 'process', 'workflow', 'methodology', 'framework',
+            'system', 'solution', 'technology', 'innovation', 'development',
+            'implementation', 'optimization', 'performance', 'metrics', 'kpi',
+            
+            # Question words for general inquiry
+            'what is', 'how does', 'explain', 'describe', 'define', 'tell me about',
+            'help me understand', 'can you explain', 'what are', 'how to',
+            
+            # Academic/research terms
+            'research', 'study', 'paper', 'publication', 'academic', 'scientific',
+            'theory', 'concept', 'principle', 'method', 'technique', 'approach'
+        ]
+        
+        # Travel/booking specific terms that would indicate NOT general knowledge
+        travel_specific = [
+            'flight', 'hotel', 'booking', 'reservation', 'cancel', 'modify',
+            'airline', 'car rental', 'travel', 'trip', 'passenger', 'guest',
+            'check-in', 'check-out', 'itinerary', 'ticket', 'fare'
+        ]
+        
+        # Check if query contains general knowledge keywords
+        has_general_keywords = any(keyword in query_lower for keyword in general_keywords)
+        
+        # Check if query contains travel-specific terms
+        has_travel_keywords = any(keyword in query_lower for keyword in travel_specific)
+        
+        # It's a general knowledge query if:
+        # 1. It has general keywords, OR
+        # 2. It doesn't have travel keywords and is a question (starts with question words)
+        is_question = any(query_lower.strip().startswith(q) for q in ['what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'would', 'should', 'explain', 'describe', 'tell', 'help'])
+        
+        return has_general_keywords or (not has_travel_keywords and is_question)
         
     def _calculate_intent_confidence(self, action: str, service: str, query_lower: str) -> float:
         """Calculate confidence in intent extraction."""
@@ -1297,6 +1359,43 @@ Your response should:
         self.logger.info(f"Intent extraction test: {results['successful_extractions']}/{len(test_queries)} successful")
         return results
     
+    def search_knowledge_base(self, query: str, limit: int = 5) -> Dict[str, any]:
+        """
+        Main interface method for Graph-R1 hypergraph constructor.
+        Returns results in the expected format with success flag.
+        """
+        try:
+            # Use the enhanced intent-driven search
+            results = self.search_knowledge_with_intent(query, limit)
+            
+            if results:
+                self.logger.info(f"✅ search_knowledge_base found {len(results)} results for: {query}")
+                return {
+                    'success': True,
+                    'results': results,
+                    'query': query,
+                    'method': 'intent_driven_search'
+                }
+            else:
+                self.logger.info(f"⚠️ search_knowledge_base found no results for: {query}")
+                return {
+                    'success': True,
+                    'results': [],
+                    'query': query,
+                    'method': 'intent_driven_search',
+                    'reason': 'no_relevant_content_found'
+                }
+                
+        except Exception as e:
+            self.logger.error(f"❌ search_knowledge_base failed: {e}")
+            return {
+                'success': False,
+                'results': [],
+                'query': query,
+                'error': str(e),
+                'method': 'intent_driven_search'
+            }
+
     def demonstrate_improvements(self, demo_queries: List[str] = None) -> Dict[str, any]:
         """Demonstrate the improvements of the new search architecture."""
         if demo_queries is None:

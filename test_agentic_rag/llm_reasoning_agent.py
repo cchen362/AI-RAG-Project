@@ -68,6 +68,21 @@ class ReasoningAction:
     timestamp: float = 0.0
 
 @dataclass
+class OrchestrationFindings:
+    """Structured findings from agentic orchestration - smart librarian results"""
+    text_chunks: List[Dict[str, Any]]
+    visual_findings: List[Dict[str, Any]]
+    salesforce_data: List[Dict[str, Any]]
+    orchestration_reasoning: str
+    confidence_assessment: float
+    sources_queried: List[SourceType]
+    insufficient_data: bool
+    reasoning_chain: List[ReasoningAction]
+    total_execution_time: float
+    total_llm_tokens: int
+    cost_breakdown: Dict[str, float]
+
+@dataclass
 class AgenticResponse:
     """Complete agentic response with reasoning transparency"""
     final_answer: str
@@ -177,16 +192,17 @@ class LLMReasoningAgent:
             if capability.availability_status == "available"
         }
     
-    def query(self, user_query: str, context: Optional[Dict] = None) -> AgenticResponse:
+    def orchestrate_retrieval(self, user_query: str, context: Optional[Dict] = None) -> OrchestrationFindings:
         """
-        Main entry point for true agentic reasoning using ReAct framework.
+        Main entry point for agentic retrieval orchestration using ReAct framework.
+        Acts as smart librarian - orchestrates retrieval but does not generate responses.
         
         Args:
             user_query: User's question or request
             context: Optional context from previous interactions
             
         Returns:
-            AgenticResponse with complete reasoning chain and final answer
+            OrchestrationFindings with structured retrieval results and reasoning
         """
         start_time = time.time()
         reasoning_chain = []
@@ -254,67 +270,176 @@ class LLMReasoningAgent:
                 self.logger.warning(f"Cost threshold exceeded: ${reasoning_context['cost_so_far']:.4f}")
                 break
         
-        # Generate final answer using gathered information
-        final_answer = self._generate_final_answer(user_query, reasoning_context, reasoning_chain)
-        total_llm_tokens += final_answer.tokens_used
-        reasoning_chain.append(final_answer)
+        # Compile orchestration findings - smart librarian returns structured results
+        findings = self._compile_orchestration_findings(user_query, reasoning_context, reasoning_chain, total_llm_tokens, start_time)
         
-        # Log the final generated response for debugging
-        self.logger.info(f"\n🎯 FINAL GENERATED RESPONSE:")
-        self.logger.info(f"{'='*60}")
+        # Enhanced orchestration completion logging for debugging
+        self.logger.info(f"\n🎯 ORCHESTRATION COMPLETE:")
+        self.logger.info(f"{'='*80}")
         self.logger.info(f"Query: {user_query}")
-        self.logger.info(f"Final Answer: {final_answer.result}")
-        self.logger.info(f"Confidence: {final_answer.confidence:.2f}")
-        self.logger.info(f"{'='*60}")
+        self.logger.info(f"Sources queried: {[s.value for s in findings.sources_queried]}")
+        self.logger.info(f"Confidence assessment: {findings.confidence_assessment:.2f}")
+        self.logger.info(f"Insufficient data: {findings.insufficient_data}")
+        self.logger.info(f"Text chunks found: {len(findings.text_chunks)}")
+        self.logger.info(f"Visual findings: {len(findings.visual_findings)}")
+        self.logger.info(f"Salesforce data: {len(findings.salesforce_data)}")
         
-        # Build comprehensive response
+        # Debug content availability
+        if findings.text_chunks:
+            first_chunk = findings.text_chunks[0]
+            if isinstance(first_chunk, dict):
+                content_preview = first_chunk.get('content', '')[:100]
+                source_type = first_chunk.get('metadata', {}).get('source', 'unknown')
+                self.logger.info(f"📄 Text content preview ({source_type}): {content_preview}...")
+        
+        if findings.insufficient_data:
+            self.logger.warning("⚠️  Insufficient data flag is set - check content detection logic")
+        else:
+            self.logger.info("✅ Sufficient data available for response generation")
+            
+        self.logger.info(f"{'='*80}")
+        
+        return findings
+    
+    def query(self, user_query: str, context: Optional[Dict] = None) -> AgenticResponse:
+        """
+        DEPRECATED: Backward compatibility method. 
+        This method violates proper separation of concerns and will be removed.
+        Use orchestrate_retrieval() instead.
+        """
+        self.logger.warning("DEPRECATED: query() method called. Use orchestrate_retrieval() instead.")
+        
+        # Get orchestration findings
+        findings = self.orchestrate_retrieval(user_query, context)
+        
+        # Convert to old AgenticResponse format for compatibility
+        return AgenticResponse(
+            final_answer="DEPRECATED_METHOD_USED",
+            reasoning_chain=findings.reasoning_chain,
+            total_reasoning_steps=len(findings.reasoning_chain),
+            sources_queried=findings.sources_queried,
+            total_execution_time=findings.total_execution_time,
+            total_llm_tokens=findings.total_llm_tokens,
+            confidence_score=findings.confidence_assessment,
+            reasoning_quality="deprecated",
+            cost_breakdown=findings.cost_breakdown
+        )
+    
+    def _compile_orchestration_findings(self, user_query: str, reasoning_context: Dict, 
+                                       reasoning_chain: List[ReasoningAction], 
+                                       total_llm_tokens: int, start_time: float) -> OrchestrationFindings:
+        """
+        Compile structured findings from orchestration process.
+        Smart librarian returns organized results without generating responses.
+        """
         execution_time = time.time() - start_time
         sources_queried = [action.source for action in reasoning_chain if action.source and action.result]
         
-        response = AgenticResponse(
-            final_answer=final_answer.result,
-            reasoning_chain=reasoning_chain,
-            total_reasoning_steps=len(reasoning_chain),
+        # Extract results by source type - FIXED to handle synthesized content
+        text_chunks = []
+        visual_findings = []
+        salesforce_data = []
+        
+        for source_name, result in reasoning_context["results_gathered"].items():
+            if source_name == "text_rag" and result:
+                if isinstance(result, dict):
+                    # FIXED: Handle synthesized content (answer field) from LLM synthesis
+                    if result.get('answer'):
+                        text_chunks = [{
+                            'content': result['answer'],
+                            'metadata': {
+                                'source': 'text_rag_synthesized',
+                                'success': result.get('success', True),
+                                'question': result.get('question', user_query)
+                            }
+                        }]
+                    # Also handle traditional chunks if present
+                    elif result.get('chunks'):
+                        text_chunks = result['chunks']
+                elif isinstance(result, list):
+                    text_chunks = result
+            elif source_name == "colpali_visual" and result:
+                if isinstance(result, list):
+                    visual_findings = result
+                elif isinstance(result, dict):
+                    visual_findings = [result]
+            elif source_name == "salesforce" and result:
+                if isinstance(result, list):
+                    salesforce_data = result
+                elif isinstance(result, dict):
+                    salesforce_data = [result]
+        
+        # Assess data sufficiency and confidence
+        has_usable_content = self._check_for_usable_content(reasoning_context["results_gathered"])
+        has_document_errors = self._check_for_document_unavailability(reasoning_context["results_gathered"])
+        insufficient_data = has_document_errors and not has_usable_content
+        
+        # Calculate confidence based on data quality and reasoning
+        confidence_assessment = self._calculate_orchestration_confidence(reasoning_chain, has_usable_content)
+        
+        # Generate orchestration reasoning summary
+        orchestration_reasoning = self._generate_orchestration_summary(reasoning_chain, sources_queried)
+        
+        return OrchestrationFindings(
+            text_chunks=text_chunks,
+            visual_findings=visual_findings,
+            salesforce_data=salesforce_data,
+            orchestration_reasoning=orchestration_reasoning,
+            confidence_assessment=confidence_assessment,
             sources_queried=sources_queried,
+            insufficient_data=insufficient_data,
+            reasoning_chain=reasoning_chain,
             total_execution_time=execution_time,
             total_llm_tokens=total_llm_tokens,
-            confidence_score=final_answer.confidence,
-            reasoning_quality=self._assess_reasoning_quality(reasoning_chain),
             cost_breakdown=self._calculate_cost_breakdown(reasoning_chain, total_llm_tokens)
         )
+    
+    def _calculate_orchestration_confidence(self, reasoning_chain: List[ReasoningAction], has_usable_content: bool) -> float:
+        """
+        Calculate confidence score for orchestration findings.
+        ENHANCED: Now properly accounts for synthesized content quality.
+        """
+        if not has_usable_content:
+            return 0.1
         
-        # COMPREHENSIVE DEBUG SUMMARY
-        self.logger.info(f"\n🎉 TRUE AGENTIC REASONING COMPLETE")
-        self.logger.info(f"{'='*80}")
-        self.logger.info(f"Total steps: {len(reasoning_chain)}")
-        self.logger.info(f"Execution time: {execution_time:.2f}s")
-        self.logger.info(f"LLM tokens: {total_llm_tokens}")
-        self.logger.info(f"Sources queried: {[s.value for s in sources_queried]}")
-        self.logger.info(f"Final confidence: {final_answer.confidence:.2f}")
-        self.logger.info(f"Total cost: ${self.total_cost:.4f}")
+        # Base confidence on reflection steps (LLM-assessed confidence)
+        reflection_confidences = [action.confidence for action in reasoning_chain if action.step == ReasoningStep.REFLECTION]
+        if reflection_confidences:
+            # If we have usable content, boost the reflection confidence
+            max_reflection = max(reflection_confidences)
+            # Give higher confidence when we have good content
+            return min(0.9, max_reflection + 0.2) if has_usable_content else max_reflection
         
-        # Step-by-step summary
-        self.logger.info(f"\n📋 REASONING CHAIN SUMMARY:")
-        for i, action in enumerate(reasoning_chain, 1):
-            if action.step == ReasoningStep.THOUGHT:
-                decision = "CONTINUE" if "CONTINUE" in action.content.upper() else "COMPLETE"
-                self.logger.info(f"  {i}. THOUGHT → {decision}")
-            elif action.step == ReasoningStep.ACTION:
-                source = action.source.value if action.source else "none"
-                self.logger.info(f"  {i}. ACTION → {source}")
-            elif action.step == ReasoningStep.OBSERVATION:
-                if action.source:
-                    success = "✅" if action.result else "❌"
-                    self.logger.info(f"  {i}. OBSERVATION → {action.source.value} {success}")
-                else:
-                    self.logger.info(f"  {i}. GENERATE → Final answer")
-            elif action.step == ReasoningStep.REFLECTION:
-                assessment = "CONTINUE" if "CONTINUE" in action.content.upper() else "SUFFICIENT"
-                self.logger.info(f"  {i}. REFLECTION → {assessment} (conf: {action.confidence:.2f})")
+        # Enhanced fallback confidence based on content quality
+        successful_retrievals = sum(1 for action in reasoning_chain if action.source and action.result)
+        total_retrievals = sum(1 for action in reasoning_chain if action.source)
         
-        self.logger.info(f"{'='*80}")
+        if total_retrievals > 0:
+            base_confidence = successful_retrievals / total_retrievals
+            # Boost confidence when we have usable content
+            enhanced_confidence = min(0.85, base_confidence + 0.15) if has_usable_content else base_confidence
+            return enhanced_confidence
         
-        return response
+        # If we have usable content but no retrievals logged, assume reasonable confidence
+        return 0.7 if has_usable_content else 0.5
+    
+    def _generate_orchestration_summary(self, reasoning_chain: List[ReasoningAction], sources_queried: List[SourceType]) -> str:
+        """Generate summary of orchestration reasoning process."""
+        summary_parts = []
+        summary_parts.append(f"Orchestrated retrieval from {len(sources_queried)} sources: {[s.value for s in sources_queried]}")
+        
+        thought_count = sum(1 for action in reasoning_chain if action.step == ReasoningStep.THOUGHT)
+        reflection_count = sum(1 for action in reasoning_chain if action.step == ReasoningStep.REFLECTION)
+        
+        summary_parts.append(f"Performed {thought_count} reasoning iterations with {reflection_count} reflection assessments")
+        
+        # Add final reasoning state
+        if reasoning_chain:
+            last_reflection = next((action for action in reversed(reasoning_chain) if action.step == ReasoningStep.REFLECTION), None)
+            if last_reflection:
+                summary_parts.append(f"Final assessment: {last_reflection.content[:100]}...")
+        
+        return ". ".join(summary_parts)
     
     def _llm_thought_step(self, context: Dict, step_number: int) -> ReasoningAction:
         """
@@ -510,7 +635,18 @@ Source options: {[s.value for s in available_sources]}"""
         try:
             if source == SourceType.TEXT_RAG and self.rag_system:
                 result = self.rag_system.query(query)
-                observation_content = f"Text RAG returned: {len(result.get('chunks', []))} chunks"
+                self.logger.debug(f"Text RAG result type: {type(result)}")
+                self.logger.debug(f"Text RAG result keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
+                self.logger.debug(f"Text RAG result: {result}")
+                
+                chunks = result.get('chunks', []) if isinstance(result, dict) else []
+                observation_content = f"Text RAG returned: {len(chunks)} chunks"
+                
+                # Add error handling for RAG system issues
+                if isinstance(result, dict) and not result.get('success', True):
+                    error_msg = result.get('error', 'Unknown error')
+                    observation_content += f" (Error: {error_msg})"
+                    self.logger.warning(f"Text RAG query error: {error_msg}")
                 
             elif source == SourceType.COLPALI_VISUAL and self.colpali_retriever:
                 result = self.colpali_retriever.query(query)
@@ -583,17 +719,25 @@ Available Remaining Sources: {remaining_sources}
 REFLECTION: Evaluate the completeness of information for answering the query.
 
 Consider:
-1. Can the query be answered well with current information?
-2. Would additional sources add significant value?
-3. Is the information comprehensive enough for the user's needs?
-4. What's the confidence level in providing a good answer?
+1. **Content Quality Assessment**: Look at the information gathered above
+   - [SYNTHESIZED ANSWER] indicates high-quality LLM-generated content
+   - [RAW CHUNKS] or [CONTENT] indicates structured data available
+   - [LIST] indicates multiple data items retrieved
+2. **Query Coverage**: Can the current information directly answer the user's question?
+3. **Additional Value**: Would querying remaining sources add substantially new information?
+4. **Efficiency**: Is the current information sufficient for a comprehensive response?
+
+Decision Guidelines:
+- If you see [SYNTHESIZED ANSWER] with substantial content, it's likely SUFFICIENT
+- If content directly addresses the query's core question, prefer SUFFICIENT
+- Only choose CONTINUE if current information has clear gaps or limitations
 
 Respond with:
 ASSESSMENT: SUFFICIENT/CONTINUE
 CONFIDENCE: [0.0 to 1.0]
-REASONING: [detailed explanation of your assessment]
+REASONING: [detailed explanation focusing on content quality and query coverage]
 
-Be efficient - only continue if additional sources would substantially improve the answer quality."""
+Be efficient and avoid unnecessary additional queries when current information is adequate."""
 
         self.logger.info(f"\n📝 PROMPT TO LLM:")
         self.logger.info(f"{prompt}")
@@ -650,55 +794,6 @@ Be efficient - only continue if additional sources would substantially improve t
                 timestamp=time.time()
             )
     
-    def _generate_final_answer(self, query: str, context: Dict, reasoning_chain: List[ReasoningAction]) -> ReasoningAction:
-        """
-        Generate final answer by synthesizing all gathered information.
-        """
-        results_summary = self._format_results_summary(context["results_gathered"])
-        reasoning_summary = self._format_reasoning_chain(reasoning_chain)
-        
-        prompt = f"""Synthesize a comprehensive answer using all gathered information.
-
-Original Query: "{query}"
-
-Information Sources Used:
-{results_summary}
-
-Reasoning Process:
-{reasoning_summary}
-
-Generate a clear, comprehensive answer that:
-1. Directly addresses the user's query
-2. Synthesizes information from all relevant sources
-3. Provides context and explanations where helpful
-4. Acknowledges any limitations or uncertainty
-
-Write a natural, helpful response that makes the best use of the gathered information."""
-
-        try:
-            response = self._call_llm(prompt)
-            
-            return ReasoningAction(
-                step=ReasoningStep.OBSERVATION,  # Final generation step
-                content="Final answer generated",
-                result=response["content"], 
-                confidence=0.8,
-                reasoning="Synthesized final answer from all gathered information",
-                tokens_used=response["tokens"],
-                timestamp=time.time()
-            )
-            
-        except Exception as e:
-            self.logger.error(f"Final answer generation failed: {e}")
-            return ReasoningAction(
-                step=ReasoningStep.OBSERVATION,
-                content="Final answer generation failed",
-                result="I apologize, but I encountered an error generating the response. Please try again.",
-                confidence=0.1,
-                reasoning=f"Generation error: {str(e)}",
-                timestamp=time.time()
-            )
-    
     def _call_llm(self, prompt: str) -> Dict[str, Any]:
         """
         Make API call to LLM with cost and token tracking.
@@ -751,19 +846,124 @@ Write a natural, helpful response that makes the best use of the gathered inform
         return "\n".join(formatted)
     
     def _format_results_summary(self, results: Dict[str, Any]) -> str:
-        """Format gathered results for LLM prompt."""
+        """
+        Format gathered results for LLM prompt.
+        ENHANCED: Now properly conveys content quality and availability.
+        """
         if not results:
             return "No information gathered yet"
         
         formatted = []
         for source, result in results.items():
             if result:
-                summary = str(result)[:200] + "..." if len(str(result)) > 200 else str(result)
-                formatted.append(f"- {source}: {summary}")
+                # Enhanced formatting to show content quality
+                if isinstance(result, dict):
+                    # Handle synthesized content specially
+                    if result.get('answer'):
+                        answer_preview = result['answer'][:300] + "..." if len(result['answer']) > 300 else result['answer']
+                        formatted.append(f"- {source}: [SYNTHESIZED ANSWER] {answer_preview}")
+                    elif result.get('chunks'):
+                        chunk_count = len(result['chunks'])
+                        first_chunk = result['chunks'][0].get('content', '')[:150] if result['chunks'] else ''
+                        formatted.append(f"- {source}: [RAW CHUNKS] {chunk_count} chunks available. Preview: {first_chunk}...")
+                    elif result.get('content'):
+                        content_preview = result['content'][:300] + "..." if len(result['content']) > 300 else result['content']
+                        formatted.append(f"- {source}: [CONTENT] {content_preview}")
+                    else:
+                        # Show available keys for debugging
+                        keys = list(result.keys())
+                        formatted.append(f"- {source}: [DICT] Available data fields: {keys}")
+                elif isinstance(result, list):
+                    count = len(result)
+                    first_item = str(result[0])[:150] if result else ""
+                    formatted.append(f"- {source}: [LIST] {count} items. First: {first_item}...")
+                else:
+                    # String or other type
+                    summary = str(result)[:300] + "..." if len(str(result)) > 300 else str(result)
+                    formatted.append(f"- {source}: [TEXT] {summary}")
             else:
                 formatted.append(f"- {source}: No results")
         
         return "\n".join(formatted)
+    
+    def _check_for_document_unavailability(self, results: Dict[str, Any]) -> bool:
+        """
+        Check if results indicate document unavailability (no documents loaded).
+        """
+        for source, result in results.items():
+            if isinstance(result, dict):
+                if not result.get('success', True):
+                    error_msg = result.get('error', '').lower()
+                    # Check for specific document unavailability errors
+                    if any(phrase in error_msg for phrase in [
+                        'no documents have been processed',
+                        'total processed documents: 0',
+                        'vector database contains: 0 vectors',
+                        'please add documents',
+                        'no vectors'
+                    ]):
+                        return True
+            elif isinstance(result, str):
+                result_lower = result.lower()
+                if any(phrase in result_lower for phrase in [
+                    'no documents',
+                    'no vectors',
+                    '0 documents',
+                    '0 vectors'
+                ]):
+                    return True
+        return False
+    
+    def _check_for_usable_content(self, results: Dict[str, Any]) -> bool:
+        """
+        Check if we have any usable content from any source.
+        FIXED: Now properly recognizes synthesized content from RAG system.
+        """
+        self.logger.debug(f"Checking usable content in results: {results}")
+        
+        for source, result in results.items():
+            self.logger.debug(f"Checking {source}: {type(result)} - {result}")
+            
+            if isinstance(result, dict):
+                # FIXED: Check for synthesized content (LLM-generated answers)
+                synthesized_answer = result.get('answer', '')
+                if synthesized_answer and len(str(synthesized_answer).strip()) > 50:
+                    self.logger.debug(f"Found synthesized content in {source}: {len(synthesized_answer)} chars")
+                    return True
+                
+                # Check for raw chunks (traditional RAG)
+                chunks = result.get('chunks', [])
+                if chunks and len(chunks) > 0:
+                    self.logger.debug(f"Found {len(chunks)} raw chunks in {source}")
+                    return True
+                
+                # Check for other content formats
+                content = result.get('content', '')
+                if content and len(str(content).strip()) > 20:
+                    self.logger.debug(f"Found content field in {source}: {len(content)} chars")
+                    return True
+                    
+                # Check if result indicates success with meaningful response
+                if result.get('success') and (synthesized_answer or content or chunks):
+                    self.logger.debug(f"Found successful result with content in {source}")
+                    return True
+                    
+            elif isinstance(result, list) and len(result) > 0:
+                # Salesforce or other list-based results
+                first_item = result[0] if result else {}
+                if isinstance(first_item, dict) and first_item.get('content'):
+                    content = first_item.get('content', '').strip()
+                    # Check if content is meaningful (not just metadata)
+                    if len(content) > 50 and not content.startswith('<h2><strong>Overview</strong></h2>'):
+                        self.logger.debug(f"Found usable list content in {source}: {len(content)} chars")
+                        return True
+            elif isinstance(result, str) and len(result.strip()) > 20:
+                # Plain text results
+                self.logger.debug(f"Found text content in {source}: {len(result)} chars")
+                return True
+        
+        self.logger.debug("No usable content found in any results")
+        return False
     
     def _format_reasoning_history(self, history: List[str]) -> str:
         """Format reasoning history for context."""

@@ -23,7 +23,7 @@ from enum import Enum
 import json
 
 # Import components
-from llm_reasoning_agent import LLMReasoningAgent, AgenticResponse as LLMAgenticResponse
+from llm_reasoning_agent import LLMReasoningAgent, AgenticResponse as LLMAgenticResponse, OrchestrationFindings
 from baseline_agentic_orchestrator import AgenticOrchestrator as BaselineOrchestrator, AgentResponse as BaselineResponse
 
 # Import existing production components  
@@ -157,45 +157,188 @@ class EnhancedAgenticOrchestrator:
             raise ValueError(f"Unknown reasoning mode: {query_mode}")
     
     def _true_agentic_query(self, user_query: str, context: Optional[Dict]) -> UnifiedResponse:
-        """Execute query using true LLM-driven agentic reasoning."""
+        """Execute query using true LLM-driven agentic orchestration + separate response generation."""
         start_time = time.time()
         
         try:
-            # Use LLM reasoning agent
-            llm_response = self.llm_agent.query(user_query, context)
+            # Step 1: Agent orchestrates retrieval (smart librarian)
+            orchestration_findings = self.llm_agent.orchestrate_retrieval(user_query, context)
+            
+            # Step 2: Generate response using orchestration findings
+            final_answer = self._generate_response_from_findings(user_query, orchestration_findings)
+            
             execution_time = time.time() - start_time
             
             # Convert to unified format
             unified_response = UnifiedResponse(
-                final_answer=llm_response.final_answer,
+                final_answer=final_answer,
                 reasoning_approach="TRUE_AGENTIC",
-                reasoning_chain=llm_response.reasoning_chain,
+                reasoning_chain=orchestration_findings.reasoning_chain,
                 execution_time=execution_time,
-                sources_used=[s.value for s in llm_response.sources_queried],
-                confidence_score=llm_response.confidence_score,
-                cost_breakdown=llm_response.cost_breakdown,
+                sources_used=[s.value for s in orchestration_findings.sources_queried],
+                confidence_score=orchestration_findings.confidence_assessment,
+                cost_breakdown=orchestration_findings.cost_breakdown,
                 reasoning_transparency={
-                    "total_reasoning_steps": llm_response.total_reasoning_steps,
-                    "llm_tokens_used": llm_response.total_llm_tokens,
-                    "reasoning_quality": llm_response.reasoning_quality,
-                    "dynamic_decisions": len([a for a in llm_response.reasoning_chain if "LLM" in a.reasoning])
+                    "total_reasoning_steps": len(orchestration_findings.reasoning_chain),
+                    "llm_tokens_used": orchestration_findings.total_llm_tokens,
+                    "reasoning_quality": "orchestration_based",
+                    "dynamic_decisions": len([a for a in orchestration_findings.reasoning_chain if "LLM" in a.reasoning])
                 },
                 performance_metrics={
                     "intelligent_source_selection": True,
                     "dynamic_stopping": True,
                     "cost_optimization": True,
-                    "reasoning_steps": llm_response.total_reasoning_steps
+                    "reasoning_steps": len(orchestration_findings.reasoning_chain)
                 }
             )
             
-            self.total_cost += llm_response.cost_breakdown.get("total", 0)
-            self.logger.info(f"TRUE agentic query complete: {execution_time:.2f}s, {llm_response.total_llm_tokens} tokens")
+            self.total_cost += orchestration_findings.cost_breakdown.get("total", 0)
+            self.logger.info(f"TRUE agentic query complete: {execution_time:.2f}s, {orchestration_findings.total_llm_tokens} tokens")
             
             return unified_response
             
         except Exception as e:
             self.logger.error(f"True agentic query failed: {e}")
             return self._create_error_response("TRUE_AGENTIC", str(e), time.time() - start_time)
+    
+    def _generate_response_from_findings(self, user_query: str, findings: OrchestrationFindings) -> str:
+        """
+        Generate final response using orchestration findings.
+        Separate response generation component following Graph-R1 architecture.
+        """
+        try:
+            # Check if we have sufficient data
+            if findings.insufficient_data:
+                return self._generate_insufficient_data_response(user_query, findings)
+            
+            # Use cross-encoder reranker if available for final selection
+            if self.reranker:
+                # Combine all findings for reranking
+                all_chunks = []
+                
+                # Add text chunks (handle both synthesized and raw)
+                for chunk in findings.text_chunks:
+                    if isinstance(chunk, dict):
+                        # Preserve source type (synthesized vs raw chunks)
+                        source_type = chunk.get('metadata', {}).get('source', 'text_rag')
+                        all_chunks.append({
+                            'content': chunk.get('content', ''),
+                            'source': source_type,
+                            'metadata': chunk.get('metadata', {})
+                        })
+                
+                # Add Salesforce data
+                for sf_item in findings.salesforce_data:
+                    if isinstance(sf_item, dict):
+                        all_chunks.append({
+                            'content': sf_item.get('content', ''),
+                            'source': 'salesforce',
+                            'metadata': sf_item.get('metadata', {})
+                        })
+                
+                # Add visual findings
+                for visual_item in findings.visual_findings:
+                    if isinstance(visual_item, dict):
+                        all_chunks.append({
+                            'content': visual_item.get('content', ''),
+                            'source': 'colpali_visual',
+                            'metadata': visual_item.get('metadata', {})
+                        })
+                
+                # Rerank and select top chunks
+                if all_chunks:
+                    reranked_results = self.reranker.rerank_chunks(user_query, all_chunks[:10])
+                    selected_content = reranked_results[:5] if reranked_results else all_chunks[:5]
+                else:
+                    selected_content = []
+            else:
+                # Simple concatenation if no reranker
+                selected_content = []
+                selected_content.extend(findings.text_chunks[:3])
+                selected_content.extend(findings.salesforce_data[:3])
+                selected_content.extend(findings.visual_findings[:2])
+            
+            # Generate response using selected content
+            return self._synthesize_final_response(user_query, selected_content, findings)
+            
+        except Exception as e:
+            self.logger.error(f"Response generation failed: {e}")
+            return f"I encountered an error while generating the response. Please try again. (Error: {str(e)})"
+    
+    def _generate_insufficient_data_response(self, user_query: str, findings: OrchestrationFindings) -> str:
+        """Generate graceful response when data is insufficient."""
+        return (
+            f"I don't have access to relevant documents to answer your query about '{user_query}'. "
+            f"The orchestration process searched {len(findings.sources_queried)} sources "
+            f"({', '.join([s.value for s in findings.sources_queried])}) but found insufficient information. "
+            f"Please ensure that relevant documents are loaded into the system."
+        )
+    
+    def _synthesize_final_response(self, user_query: str, content_chunks: List[Dict], findings: OrchestrationFindings) -> str:
+        """
+        ENHANCED: Synthesize final response from selected content chunks.
+        Now matches pseudo-agentic response quality by preserving full synthesized content.
+        """
+        if not content_chunks:
+            return self._generate_insufficient_data_response(user_query, findings)
+        
+        # Group content by source type and preserve quality
+        text_content = [c for c in content_chunks if c.get('source') in ['text_rag', 'text_rag_synthesized']]
+        salesforce_content = [c for c in content_chunks if c.get('source') == 'salesforce']
+        visual_content = [c for c in content_chunks if c.get('source') == 'colpali_visual']
+        
+        # Build high-quality response (no truncation like pseudo-agentic)
+        response_sections = []
+        
+        # Handle text content (including synthesized answers)
+        if text_content:
+            primary_text = text_content[0].get('content', '').strip()
+            if primary_text:
+                # For synthesized content, use the full answer (matches pseudo-agentic quality)
+                if len(primary_text) > 100:  # Substantial content
+                    response_sections.append(primary_text)
+                else:
+                    # For shorter content, try to enhance with additional chunks
+                    all_text = " ".join([c.get('content', '') for c in text_content[:3]])
+                    response_sections.append(all_text.strip())
+        
+        # Handle Salesforce content with proper formatting
+        if salesforce_content:
+            sf_content = []
+            for sf_item in salesforce_content[:2]:  # Limit to top 2 for readability
+                content = sf_item.get('content', '').strip()
+                if content and len(content) > 50:  # Meaningful content only
+                    sf_content.append(content)
+            
+            if sf_content:
+                sf_section = "\n\n**Enterprise Knowledge**: " + " ".join(sf_content)
+                response_sections.append(sf_section)
+        
+        # Handle visual content
+        if visual_content:
+            visual_items = []
+            for visual_item in visual_content[:2]:
+                content = visual_item.get('content', '').strip()
+                if content and len(content) > 30:
+                    visual_items.append(content)
+            
+            if visual_items:
+                visual_section = "\n\n**Visual Analysis**: " + " ".join(visual_items)
+                response_sections.append(visual_section)
+        
+        # Synthesize final response
+        if response_sections:
+            # Join sections naturally
+            final_response = "\n\n".join(response_sections).strip()
+            
+            # Add minimal source attribution (less intrusive than before)
+            if len(findings.sources_queried) > 1:
+                source_names = [s.value.replace('_', ' ').title() for s in findings.sources_queried]
+                final_response += f"\n\n*Sources: {', '.join(source_names)}*"
+            
+            return final_response
+        else:
+            return self._generate_insufficient_data_response(user_query, findings)
     
     def _pseudo_agentic_query(self, user_query: str, context: Optional[Dict]) -> UnifiedResponse:
         """Execute query using pseudo-agentic fixed pipeline."""
