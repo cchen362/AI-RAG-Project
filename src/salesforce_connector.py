@@ -3,7 +3,7 @@ from simple_salesforce import Salesforce
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed
 from dotenv import load_dotenv
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime
 import time
 
@@ -1610,3 +1610,63 @@ Your response should:
             'demonstrations': demonstrations,
             'summary': 'Intent-driven search provides more relevant, targeted results'
         }
+
+    def search(self, query: str, limit: int = 5) -> Dict[str, Any]:
+        """
+        Unified search method for agentic orchestrator compatibility.
+        
+        This method provides a standardized interface that the agentic orchestrator expects,
+        wrapping the more specific search_knowledge_base method.
+        
+        Args:
+            query: Search query string
+            limit: Maximum number of results to return
+            
+        Returns:
+            Dict with success, articles list, and metadata
+        """
+        try:
+            # Use the enhanced search_knowledge_base method
+            results = self.search_knowledge_base(query, limit)
+            
+            if results and results.get('success', False):
+                # Transform results to expected format for orchestrator
+                articles = []
+                for result in results.get('results', []):
+                    articles.append({
+                        'content': result.get('content', ''),
+                        'title': result.get('title', ''),
+                        'url': result.get('url', ''),
+                        'score': result.get('score', 0.0),
+                        'metadata': result.get('metadata', {})
+                    })
+                
+                return {
+                    'success': True,
+                    'articles': articles,
+                    'query': query,
+                    'total_found': len(articles),
+                    'search_method': results.get('method', 'knowledge_base'),
+                    'source_type': 'salesforce'
+                }
+            else:
+                # No results found
+                return {
+                    'success': True,
+                    'articles': [],
+                    'query': query,
+                    'total_found': 0,
+                    'search_method': 'no_results',
+                    'source_type': 'salesforce',
+                    'reason': results.get('reason', 'no_matching_content')
+                }
+                
+        except Exception as e:
+            self.logger.error(f"❌ Unified search method failed: {e}")
+            return {
+                'success': False,
+                'articles': [],
+                'query': query,
+                'error': str(e),
+                'source_type': 'salesforce'
+            }

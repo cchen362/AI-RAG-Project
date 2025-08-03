@@ -135,8 +135,14 @@ class AgenticRAGOrchestrator:
             initial_reasoning = await self._think_about_query(query)
             self.reasoning_history.append(initial_reasoning)
             
-            # Step 2-N: Iterative reasoning and retrieval
-            logger.info("🔄 Step 2+: Agent executing retrieval strategy...")
+            # Step 2-N: Intelligent iterative reasoning and retrieval with early stopping
+            logger.info("🔄 Step 2+: Agent executing retrieval strategy with intelligent stopping...")
+            
+            # Track progress for early stopping decisions
+            confidence_history = []
+            sources_tried = set()
+            no_progress_count = 0
+            
             for step_num in range(self.max_reasoning_steps):
                 logger.info(f"   Reasoning step {step_num + 1}/{self.max_reasoning_steps}")
                 
@@ -148,6 +154,7 @@ class AgenticRAGOrchestrator:
                     **action_decision
                 })
                 
+                # Check if agent decided to synthesize
                 if action_decision['action'] == 'synthesize':
                     logger.info("✅ Agent decided to synthesize - sufficient information gathered")
                     break
@@ -158,13 +165,24 @@ class AgenticRAGOrchestrator:
                     query, action_decision
                 )
                 
+                # Track which sources have been tried
+                source_type = retrieval_results.get('source_type', 'unknown')
+                sources_tried.add(source_type)
+                
                 # Agent observes and evaluates results
                 observation = await self._observe_results(query, retrieval_results)
                 self.reasoning_history.append(observation)
                 
-                # Check if we have sufficient information
-                if observation.get('confidence_score', 0) >= self.min_confidence_threshold:
-                    logger.info(f"✅ Confidence threshold met: {observation['confidence_score']:.2f}")
+                current_confidence = observation.get('confidence_score', 0.0)
+                confidence_history.append(current_confidence)
+                
+                # Enhanced early stopping logic
+                should_stop, stop_reason = self._should_stop_reasoning(
+                    current_confidence, confidence_history, sources_tried, step_num
+                )
+                
+                if should_stop:
+                    logger.info(f"✅ Early stopping triggered: {stop_reason}")
                     break
             
             # Final synthesis using existing high-quality approach
@@ -198,29 +216,52 @@ class AgenticRAGOrchestrator:
         This is like the <think> step in your example - the agent analyzes
         what the user is asking and plans the best approach.
         """
-        thinking_prompt = f"""You are an intelligent RAG agent analyzing a user query to plan an optimal retrieval strategy.
+        thinking_prompt = f"""You are an intelligent RAG agent with query classification capabilities. Analyze the user query to determine the optimal retrieval strategy.
 
 <query>{query}</query>
 
-<available_sources>
-1. TEXT_RAG: High-quality text documents with proven LLM synthesis for detailed content extraction
-2. COLPALI_VISUAL: Visual document analysis using ColPali for charts, diagrams, tables, figures  
-3. SALESFORCE: Business knowledge base with policies, procedures, workflows, customer service info
-</available_sources>
+<source_capabilities>
+1. TEXT_RAG: Research documents, reports, analyses, detailed textual content, technical documentation
+2. COLPALI_VISUAL: Charts, graphs, diagrams, tables, figures, visual data representations, infographics
+3. SALESFORCE: Business policies, procedures, workflows, customer service info, travel policies, corporate knowledge
+</source_capabilities>
+
+<query_classification_criteria>
+VISUAL_QUERY indicators: "chart", "graph", "diagram", "table", "figure", "visual", "image", "trend", "data visualization"
+BUSINESS_QUERY indicators: "policy", "procedure", "workflow", "travel", "booking", "reservation", "corporate", "business process"
+ANALYTICAL_QUERY indicators: "analyze", "research", "study", "report", "findings", "detailed analysis", "comprehensive"
+MULTI_MODAL indicators: Queries that might benefit from multiple perspectives or data types
+</query_classification_criteria>
 
 <task>
-Analyze this query and reason about the best retrieval strategy. Consider:
-1. What type of information is the user seeking?
-2. Which sources would most likely contain this information?
-3. Are there multiple aspects to this question requiring different sources?
-4. What's the logical order to search for information?
-5. How can I determine if I have sufficient information to answer?
+Perform intelligent query classification and strategy planning:
+
+1. CLASSIFY THE QUERY:
+   - Primary type: VISUAL/BUSINESS/ANALYTICAL/MULTI_MODAL
+   - Secondary aspects: What other types of information might be relevant?
+   - Confidence in classification: How certain are you about the primary type?
+
+2. SOURCE SELECTION STRATEGY:
+   - Primary source: Which source is most likely to have the core information?
+   - Secondary sources: Which other sources might provide complementary information?
+   - Search order: What's the most efficient order to query sources?
+
+3. SUCCESS CRITERIA:
+   - What constitutes sufficient information to answer this query?
+   - How will you know when to stop searching?
+   - What quality threshold should trigger additional searches?
 </task>
 
 Respond EXACTLY in this format:
 <think>
 [Your detailed reasoning about the query, what information is needed, and why]
 </think>
+<classification>
+[Primary query type: VISUAL/BUSINESS/ANALYTICAL/MULTI_MODAL and confidence level]
+</classification>
+<primary_source>
+[Which source (TEXT_RAG/COLPALI_VISUAL/SALESFORCE) should be searched first and why]
+</primary_source>
 <plan>
 [Specific plan for which sources to query, in what order, and success criteria]
 </plan>
@@ -235,10 +276,12 @@ Respond EXACTLY in this format:
                 'step_type': 'initial_reasoning',
                 'query': query,
                 'reasoning': self._extract_section(response, 'think'),
+                'classification': self._extract_section(response, 'classification'),
+                'primary_source': self._extract_section(response, 'primary_source'),
                 'plan': self._extract_section(response, 'plan'),
                 'initial_confidence': float(self._extract_section(response, 'confidence') or '0.5'),
                 'timestamp': datetime.now().isoformat(),
-                'decision_summary': f"Analyzed query and planned retrieval approach"
+                'decision_summary': f"Classified as {self._extract_section(response, 'classification')} - plan: {self._extract_section(response, 'primary_source')}"
             }
         except Exception as e:
             logger.error(f"❌ Initial reasoning failed: {e}")
@@ -247,6 +290,8 @@ Respond EXACTLY in this format:
                 'step_type': 'initial_reasoning',
                 'query': query,
                 'reasoning': f"Failed to generate detailed reasoning: {e}. Will try all sources.",
+                'classification': "MULTI_MODAL (fallback)",
+                'primary_source': "TEXT_RAG (fallback)",
                 'plan': "Query text, visual, and business sources systematically.",
                 'initial_confidence': 0.5,
                 'timestamp': datetime.now().isoformat(),
@@ -261,27 +306,45 @@ Respond EXACTLY in this format:
         """
         context = self._build_context_from_history(history)
         
-        decision_prompt = f"""You are an intelligent RAG agent deciding the next retrieval action.
+        # Extract classification and primary source from initial reasoning
+        initial_reasoning = next((step for step in history if step.get('step_type') == 'initial_reasoning'), {})
+        classification = initial_reasoning.get('classification', 'UNKNOWN')
+        primary_source = initial_reasoning.get('primary_source', 'TEXT_RAG')
+        
+        decision_prompt = f"""You are an intelligent RAG agent with classification-aware decision making.
 
 <query>{query}</query>
+<query_classification>{classification}</query_classification>
+<recommended_primary_source>{primary_source}</recommended_primary_source>
+
 <current_context>
 {context}
 </current_context>
 
 <available_actions>
 1. search_text - Query text documents for detailed textual information
-2. search_visual - Query visual documents (PDFs) for charts, diagrams, tables
+2. search_visual - Query visual documents (PDFs) for charts, diagrams, tables  
 3. search_salesforce - Query business knowledge base for policies, procedures
 4. search_multiple - Query multiple sources simultaneously for comprehensive coverage
 5. synthesize - Sufficient information gathered, ready to generate final answer
 </available_actions>
 
+<intelligent_decision_guidelines>
+- Use the query classification to prioritize sources intelligently
+- If initial reasoning suggested a primary source, consider starting there unless context shows it's been tried
+- VISUAL queries should prioritize search_visual
+- BUSINESS queries should prioritize search_salesforce  
+- ANALYTICAL queries should prioritize search_text
+- MULTI_MODAL queries may benefit from search_multiple
+- Only synthesize when you have sufficient quality information
+</intelligent_decision_guidelines>
+
 <task>
-Based on the query and what we've learned so far, decide the next action:
-- What information gaps still exist?
-- Which sources haven't been tried that might help?
-- Is the current information sufficient for a comprehensive answer?
-- What's the most logical next step?
+Make an intelligent decision based on query classification and current context:
+- What information gaps still exist based on the query type?
+- Which sources align with the classification and haven't been adequately tried?
+- Is the current information sufficient for this type of query?
+- What's the most strategic next step given the classification?
 </task>
 
 Respond EXACTLY in this format:
@@ -599,6 +662,50 @@ Generate a clear, detailed answer based on the available information."""
                 context_parts.append(f"Still Missing: {step.get('information_gaps', '')}")
         
         return "\n".join(context_parts)
+    
+    def _should_stop_reasoning(self, current_confidence: float, confidence_history: List[float], 
+                              sources_tried: set, step_num: int) -> Tuple[bool, str]:
+        """
+        Intelligent early stopping logic based on multiple criteria.
+        
+        Returns:
+            tuple: (should_stop: bool, reason: str)
+        """
+        # Criterion 1: High confidence threshold reached
+        if current_confidence >= self.min_confidence_threshold:
+            return True, f"High confidence achieved: {current_confidence:.2f}"
+        
+        # Criterion 2: Confidence plateau - no improvement over last few steps
+        if len(confidence_history) >= 3:
+            recent_scores = confidence_history[-3:]
+            if all(score <= 0.3 for score in recent_scores):  # Consistently low scores
+                return True, f"Consistently low confidence scores: {recent_scores}"
+            
+            # Check for confidence plateau (no significant improvement)
+            if len(confidence_history) >= 4:
+                recent_avg = sum(confidence_history[-3:]) / 3
+                earlier_avg = sum(confidence_history[-6:-3]) / 3 if len(confidence_history) >= 6 else 0
+                
+                if recent_avg <= earlier_avg + 0.05:  # No significant improvement
+                    return True, f"Confidence plateau detected: recent={recent_avg:.2f}, earlier={earlier_avg:.2f}"
+        
+        # Criterion 3: All relevant sources tried with low results
+        expected_sources = {'text', 'visual', 'salesforce', 'multiple'}
+        if len(sources_tried.intersection(expected_sources)) >= 3 and current_confidence <= 0.4:
+            return True, f"Multiple sources tried with low confidence: {sources_tried} - confidence: {current_confidence:.2f}"
+        
+        # Criterion 4: Excessive steps without good results
+        if step_num >= 8 and max(confidence_history) <= 0.5:
+            return True, f"Excessive steps ({step_num + 1}) without good results: max_confidence={max(confidence_history):.2f}"
+        
+        # Criterion 5: Agent keeps trying same source type without improvement
+        if len(confidence_history) >= 4:
+            last_4_confidences = confidence_history[-4:]
+            if all(conf <= 0.3 for conf in last_4_confidences):
+                return True, f"No progress in last 4 attempts: {last_4_confidences}"
+        
+        # Continue searching
+        return False, ""
     
     def _format_results_for_evaluation(self, retrieval_results: Dict[str, Any]) -> str:
         """Format retrieval results for agent evaluation."""
