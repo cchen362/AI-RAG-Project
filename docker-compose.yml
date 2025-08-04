@@ -239,6 +239,14 @@ networks:
 #   docker-compose --profile gpu up -d ai-rag-app-gpu
 #   Access: http://localhost:8502
 #
+# Production server deployment (custom port):
+#   docker run -d --name ai-rag-production \
+#     --gpus all -p 3015:8501 \
+#     -v $(pwd)/data:/app/data \
+#     -v $(pwd)/cache:/app/cache \
+#     --env-file .env \
+#     ai-rag-app:gpu
+#
 # Model pre-building (development):
 #   CPU models: docker-compose --profile build-models up cpu-model-builder
 #   GPU models: docker-compose --profile build-gpu-models up gpu-model-builder
@@ -281,6 +289,46 @@ networks:
 #    sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
 #    sudo systemctl restart docker
 # 3. Verify GPU access: docker run --rm --gpus all nvidia/cuda:12.1-base-ubuntu20.04 nvidia-smi
+#
+# =====================================
+# Nginx Reverse Proxy Integration
+# =====================================
+# For production server deployments with domain access:
+#
+# 1. Create nginx configuration (/etc/nginx/sites-available/ai-rag):
+#    server {
+#        listen 80;
+#        server_name your-domain.com;
+#        
+#        location / {
+#            proxy_pass http://172.19.0.1:3015;  # Docker gateway IP
+#            proxy_set_header Host $host;
+#            proxy_set_header X-Real-IP $remote_addr;
+#            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#            proxy_set_header X-Forwarded-Proto $scheme;
+#            proxy_read_timeout 300s;
+#            proxy_connect_timeout 75s;
+#        }
+#    }
+#
+# 2. Enable and restart nginx:
+#    sudo ln -s /etc/nginx/sites-available/ai-rag /etc/nginx/sites-enabled/
+#    sudo nginx -t && sudo systemctl reload nginx
+#
+# 3. Find Docker gateway IP if needed:
+#    docker network inspect bridge | grep Gateway
+#
+# =====================================
+# Environment Variable Override Strategy
+# =====================================
+# For production reliability, ensure environment variables override
+# any baked-in container values by modifying src files:
+#
+# In src/salesforce_connector.py and similar:
+#   load_dotenv("/app/.env", override=True)  # Add override=True
+#
+# This prevents issues where container layers contain outdated/invalid
+# environment variables that aren't replaced by .env files.
 #
 # ===============================
 # Production Monitoring Commands

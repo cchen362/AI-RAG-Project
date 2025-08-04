@@ -1,17 +1,21 @@
-# Core RAG Framework - Like your main cooking tools
+# AI-RAG-Project Requirements - Consolidated for CPU & GPU deployment
+# Production tested on Linux server (August 2025)
+# Automatically detects and uses GPU acceleration when available
+
+# Core RAG Framework - Production tested components
 langchain>=0.2.0
 langchain-community>=0.2.0
 langchain-openai>=0.1.0
 
-# Vector Database - Your "smart filing cabinet"
+# Vector Database - Auto-detects GPU/CPU for optimal performance
 chromadb>=0.5.0
-faiss-cpu>=1.7.4
+faiss-cpu>=1.7.4                 # Automatically uses GPU if available
 # Alternative options (choose one):
 # pinecone-client>=3.0.0
 # weaviate-client>=4.0.0
 
-# AI Models and Embeddings - Your "smart assistants"
-openai>=1.30.0
+# AI Models and Embeddings - Updated for 2025
+openai>=1.50.0                   # Latest API with improved performance
 sentence-transformers>=3.0.0
 scikit-learn>=1.3.0
 
@@ -22,10 +26,9 @@ python-docx>=1.1.0
 openpyxl>=3.1.0
 pandas>=2.2.0
 
-# Web Interface - Your "serving dishes"
-streamlit>=1.35.0
+# Web Interface - Modern glassmorphism UI
+streamlit>=1.40.0                # Latest stable with enhanced performance
 streamlit-extras>=0.3.0          # For advanced UI components (stylable_container)
-gradio>=4.35.0
 
 # Utilities - Your "kitchen helpers"
 python-dotenv>=1.0.0
@@ -39,9 +42,10 @@ simple-salesforce>=1.12.0
 jupyter>=1.0.0
 notebook>=7.2.0
 
-# ColPali Visual Embeddings - Latest Compatible Versions (2025)
+# ColPali Visual Embeddings - Production tested versions
 colpali-engine>=0.3.10       # Latest stable version with transformers 4.50.0+ compatibility
-pdf2image>=1.17.0
+pdf2image>=1.17.0            # PDF to image conversion
+Pillow>=10.0.0               # Essential for image processing (PIL)
 # Note: pdf2image requires poppler system dependency
 # Windows: conda install -c conda-forge poppler
 # Linux: apt-get install poppler-utils  
@@ -49,8 +53,10 @@ pdf2image>=1.17.0
 
 # AI Models - Updated for 2025 Compatibility
 transformers>=4.50.0         # Required for latest ColPali models
-torch>=2.5.1                 # Avoid 2.6.0 MPS issues, compatible with colpali-engine
-flash-attn                   # Flash attention for GPU acceleration (optional for CPU)
+torch>=2.5.1                 # Stable version, compatible with colpali-engine
+accelerate>=0.33.0           # Hugging Face GPU acceleration utilities
+# Note: flash-attn removed - optional performance optimization
+# Install separately if needed: pip install flash-attn
 
 # Re-ranker Architecture
 tiktoken>=0.5.0              # Token counting for transparency

@@ -61,6 +61,18 @@ AI-RAG-Project with clean multi-source architecture supporting Text RAG + ColPal
 - ✅ **Modern Typography**: Enhanced text hierarchy with glassmorphic text effects
 - ✅ **Launch Utility**: Added `launch_app.py` for streamlined development workflow
 
+### **🖥️ August 2025 - Production Server Deployment**
+- ✅ **Linux Server Deployment**: Successfully deployed on Debian server with nginx reverse proxy
+- ✅ **OpenAI API Key Container Issues**: Identified and resolved baked-in invalid API key problems
+- ✅ **Container Replacement Strategy**: Established new container creation vs modification approach
+- ✅ **Nginx Reverse Proxy Configuration**: Configured nginx with Docker gateway IP (172.19.0.1)
+- ✅ **Docker Gateway Networking**: Resolved 502/504 errors with proper container networking
+- ✅ **Environment Variable Override**: Implemented load_dotenv override=True for production
+- ✅ **Salesforce Authentication Fix**: Fixed persistent placeholder credentials issue
+- ✅ **GPU Memory Optimization**: Applied memory management for resource-constrained systems
+- ✅ **System Initialization Debugging**: Comprehensive troubleshooting of model loading failures
+- ✅ **Production Troubleshooting**: Created real-world deployment troubleshooting guides
+
 ### **Codebase Cleanup - July 2025**
 **REMOVED 45+ obsolete files:**
 - 19 test/debug files (test_*.py, debug_*.py, fix_*.py)
@@ -74,7 +86,6 @@ AI-RAG-Project/
 ├── streamlit_rag_app.py          # Main application
 ├── launch_app.py                 # Development launcher utility
 ├── requirements.txt              # Dependencies  
-├── requirements-gpu.txt          # GPU-optimized dependencies
 ├── Dockerfile                    # Container config
 ├── docker-compose.yml            # Container orchestration
 ├── README.MD                     # Project documentation
@@ -111,6 +122,15 @@ AI-RAG-Project/
 - **Graceful Fallback**: Text RAG continues when visual processing unavailable
 - **User Communication**: Real-time status indicators and installation guidance
 - **Environment Integration**: Proper .env loading for API key management
+
+### **Production Server Architecture (August 2025)**
+- **Nginx Reverse Proxy**: Docker gateway networking (172.19.0.1) for reliable container communication
+- **Container Replacement Pattern**: New container creation vs in-place modification for consistency
+- **Environment Override Strategy**: load_dotenv("/app/.env", override=True) for production reliability
+- **API Key Container Isolation**: Fresh container deployment to avoid baked-in invalid credentials
+- **Docker Network Discovery**: Automated gateway IP detection for proxy configuration
+- **System Initialization Monitoring**: Comprehensive error tracking and resolution patterns
+- **GPU Memory Management**: PYTORCH_CUDA_ALLOC_CONF optimization for constrained environments
 
 ### **🎨 Glassmorphism UI Architecture (July 2025)**
 - **Design System**: Modern glassmorphic interface with vibrant gradients
@@ -247,7 +267,6 @@ AI-RAG-Project/
 ├── streamlit_rag_app.py          # Main production application
 ├── launch_app.py                 # Development launcher utility
 ├── requirements.txt              # Python dependencies  
-├── requirements-gpu.txt          # GPU-optimized dependencies
 ├── Dockerfile                    # Multi-stage container build
 ├── docker-compose.yml            # Orchestration with GPU support
 ├── .dockerignore                 # Optimized build context
@@ -269,10 +288,18 @@ AI-RAG-Project/
 ```
 
 ---
-*Last Updated: July 2025 - UI Enhancement & Cross-Platform Support Complete*
-*Status: Production Ready with Modern Glassmorphism UI & Cross-Platform Support*
+*Last Updated: August 2025 - Production Server Deployment Complete*
+*Status: Production Deployed with Modern UI & Enterprise Server Architecture*
 
 ## 🌟 Latest Enhancements Summary
+
+**✅ 🖥️ Production Server Deployment (August 2025)**
+- Successfully deployed on Linux server (Debian) with nginx reverse proxy
+- Resolved complex container networking issues (502/504 gateway errors)
+- Implemented environment variable override strategy for production reliability
+- Established container replacement pattern for consistent deployments
+- Fixed OpenAI API key container isolation issues
+- Applied GPU memory optimization for constrained server environments
 
 **✅ 🎨 Modern Glassmorphism UI Transformation**
 - Complete visual overhaul with vibrant glassmorphic design system
@@ -281,40 +308,34 @@ AI-RAG-Project/
 - Enhanced sidebar navigation with glass container effects
 - Professional enterprise-ready user interface
 
-**✅ Cross-Platform Poppler Support**
+**✅ Cross-Platform & Server Support**
 - Intelligent OS detection (Windows/Linux/macOS)
 - Platform-specific installation path discovery
 - Docker container optimization with system PATH priority
+- Production server architecture with nginx integration
 
-**✅ Graceful Degradation Architecture**  
-- Text RAG continues when visual processing unavailable
-- Clear user notifications with installation guidance
-- No system failures when poppler missing
+**✅ Enhanced Production Architecture**  
+- Docker gateway networking (172.19.0.1) for reliable container communication
+- Environment override strategy: load_dotenv("/app/.env", override=True)
+- Container replacement vs modification best practices
+- Comprehensive troubleshooting guides based on real deployment experience
 
-**✅ Enhanced User Experience**
-- Real-time system capability indicators in UI
-- Feature status dashboard (Text ✅, Visual ✅/⚠️, Salesforce ✅/❌)
-- Platform-specific troubleshooting guidance
-- Modern glassmorphic visual feedback and interactions
-
-**✅ Development Workflow Improvements**
+**✅ Development & Operations**
 - Added `launch_app.py` for streamlined development startup
 - Enhanced project structure with organized utility scripts
 - Comprehensive codebase cleanup (45+ obsolete files removed)
+- Real-world deployment troubleshooting documentation
 
 **✅ Environment & Configuration**
-- Proper .env file loading for API keys
+- Production-grade environment variable management
 - POPPLER_PATH environment variable support
 - Comprehensive Docker environment variable configuration
+- OpenAI API key container isolation and management
 
-**✅ Documentation & Deployment**
-- Updated Docker files with cross-platform comments
-- Comprehensive README with troubleshooting section
-- Production-ready deployment guides for all platforms
-
-**🎯 Current System Status: Enhanced Production Ready with Modern UI**
-- Multi-source RAG with intelligent source selection
+**🎯 Current System Status: Production Deployed with Enterprise Architecture**
+- Multi-source RAG with intelligent source selection deployed on Linux server
+- Nginx reverse proxy configuration with Docker gateway networking
 - Cross-platform compatibility with graceful fallbacks  
 - Instant Docker startup with pre-loaded models
 - Modern glassmorphism UI with professional design
-- Complete system health monitoring and status reporting
+- Complete system health monitoring and production troubleshooting guides

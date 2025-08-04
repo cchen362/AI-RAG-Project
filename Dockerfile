@@ -18,8 +18,8 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install CPU-optimized dependencies
-COPY requirements.txt requirements-gpu.txt ./
+# Copy requirements and install dependencies (auto-detects CPU/GPU)
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create model cache directories
@@ -69,9 +69,9 @@ RUN ln -s /usr/bin/python3.9 /usr/bin/python
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install GPU-optimized dependencies
-COPY requirements.txt requirements-gpu.txt ./
-RUN pip install --no-cache-dir -r requirements-gpu.txt
+# Copy requirements and install dependencies (auto-detects GPU acceleration)
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Create model cache directories
 RUN mkdir -p /app/models/transformers /app/models/huggingface /app/models/torch
@@ -189,9 +189,9 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 # Set working directory
 WORKDIR /app
 
-# Copy and install GPU requirements
-COPY requirements-gpu.txt .
-RUN pip install --no-cache-dir -r requirements-gpu.txt
+# Copy and install consolidated requirements (GPU auto-detected)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy pre-loaded models from GPU builder stage
 COPY --from=gpu-model-builder --chown=appuser:appuser /app/models /app/models

@@ -93,7 +93,6 @@ AI-RAG-Project/
 ├── streamlit_rag_app.py          # Main production application
 ├── launch_app.py                 # Development launcher utility
 ├── requirements.txt              # Python dependencies
-├── requirements-gpu.txt          # GPU-optimized dependencies  
 ├── Dockerfile                    # Multi-stage container build
 ├── docker-compose.yml            # GPU support & orchestration
 ├── deploy-gpu-server.sh          # GPU server deployment script
@@ -189,6 +188,54 @@ Result: Instant startup with full functionality
 - Model verification via manifest validation
 - Streamlit health endpoint monitoring
 - Container restart policies for reliability
+
+## 🖥️ Linux Server Deployment
+
+### **Production Server Setup**
+```bash
+# 1. Deploy container with proper port mapping
+docker run -d \
+  --name ai-rag-production \
+  --gpus all \
+  -p 3015:8501 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/cache:/app/cache \
+  --env-file .env \
+  ai-rag-app:gpu
+
+# 2. Configure nginx reverse proxy (example)
+server {
+    listen 80;
+    server_name ragtest.zyroi.com;
+    
+    location / {
+        proxy_pass http://172.19.0.1:3015;  # Docker gateway IP
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### **Environment Variable Override Strategy**
+**Critical for production deployments** - Use override pattern to ensure environment variables take precedence over baked-in container values:
+
+```python
+# In src/salesforce_connector.py and similar files
+from dotenv import load_dotenv
+load_dotenv("/app/.env", override=True)  # override=True is crucial
+```
+
+### **Container Replacement vs Modification**
+**Best Practice**: Create new containers rather than modifying existing ones:
+```bash
+# ✅ Recommended: Create new container
+docker run -d --name ai-rag-new-version ...
+
+# ❌ Avoid: Modifying running containers
+# (leads to inconsistent state and hard-to-debug issues)
+```
 
 ## 💡 Usage Examples
 
@@ -373,6 +420,64 @@ docker logs ai-rag-cpu
 
 # Manual health check
 docker exec ai-rag-cpu python scripts/health_check.py
+```
+
+#### **System Initialization Failed (Production)**
+**Symptoms**: "System initialization failed" error when processing documents
+**Root Cause**: Invalid/truncated OpenAI API key baked into container layers
+**Solution**:
+```bash
+# 1. Create new container with fresh environment
+docker run -d \
+  --name ai-rag-clean-new \
+  --gpus all \
+  -p 3016:8501 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/cache:/app/cache \
+  --env-file .env \
+  -e OPENAI_API_KEY=your_full_valid_key_here \
+  ai-rag-app:gpu
+
+# 2. Update nginx proxy to point to new container
+# proxy_pass http://172.19.0.1:3016;
+```
+
+#### **Nginx 502/504 Gateway Errors**
+**Symptoms**: Bad Gateway errors when accessing via domain
+**Root Cause**: Nginx cannot reach Docker container due to networking issues
+**Solutions**:
+```bash
+# Option 1: Use Docker gateway IP (most reliable)
+proxy_pass http://172.19.0.1:3015;
+
+# Option 2: Use container IP (if gateway fails)
+# Find container IP: docker inspect <container_name> | grep IPAddress
+proxy_pass http://172.19.0.2:8501;
+
+# Option 3: Use host network (development only)
+docker run --network host ...
+```
+
+#### **Salesforce Authentication Still Shows Placeholder**
+**Symptoms**: Shows "your_salesforce_username" despite setting environment variables
+**Root Cause**: Baked-in environment variables not being overridden by .env file
+**Solution**: Modify connector to force override:
+```python
+# In src/salesforce_connector.py
+load_dotenv("/app/.env", override=True)  # Add override=True
+```
+
+#### **Docker Container Network Discovery**
+**Find Docker gateway IP**:
+```bash
+# Method 1: Gateway IP
+docker network inspect bridge | grep Gateway
+
+# Method 2: Container inspection
+docker inspect <container> | grep Gateway
+
+# Method 3: From inside container
+ip route | grep default
 ```
 
 ### **Environment Variable Reference**
