@@ -75,7 +75,7 @@ services:
     image: ai-rag-app:gpu
     container_name: ai-rag-gpu
     ports:
-      - "8502:8501"  # Different port to avoid conflicts
+      - "8501:8501"  # Production port for rag.zyroi.com
     environment:
       # Core application settings
       - STREAMLIT_SERVER_HEADLESS=true
@@ -247,7 +247,7 @@ networks:
 #
 # GPU mode (requires nvidia-container-toolkit):
 #   docker-compose --profile gpu up -d ai-rag-app-gpu
-#   Access: http://localhost:8502
+#   Access: http://localhost:8501 (rag.zyroi.com)
 #
 # Production server deployment (custom port):
 #   docker run -d --name ai-rag-production \

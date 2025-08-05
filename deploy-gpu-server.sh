@@ -325,8 +325,8 @@ deploy_application() {
         log "Waiting for GPU-only application to start..."
         sleep 45  # Extra time for GPU model loading
         
-        if curl -f http://localhost:8502/_stcore/health &> /dev/null; then
-            log "🚀 GPU-ONLY deployment successful! Application available at: http://localhost:8502"
+        if curl -f http://localhost:8501/_stcore/health &> /dev/null; then
+            log "🚀 GPU-ONLY deployment successful! Application available at: http://localhost:8501"
             log "✅ Old CPU compatibility ensured - all AI processing on RTX 3080"
         else
             warn "GPU-only deployment may have issues. Check logs: docker-compose logs ai-rag-app-gpu"
@@ -341,8 +341,8 @@ deploy_application() {
         log "Waiting for application to start..."
         sleep 30
         
-        if curl -f http://localhost:8502/_stcore/health &> /dev/null; then
-            log "🚀 GPU deployment successful! Application available at: http://localhost:8502"
+        if curl -f http://localhost:8501/_stcore/health &> /dev/null; then
+            log "🚀 GPU deployment successful! Application available at: http://localhost:8501"
         else
             warn "GPU deployment may have issues. Check logs: docker-compose logs ai-rag-app-gpu"
         fi
@@ -409,8 +409,8 @@ print_summary() {
     
     if command -v nvidia-smi &> /dev/null && docker run --rm --gpus all nvidia/cuda:12.1-base-ubuntu20.04 nvidia-smi &> /dev/null; then
         info "GPU-Accelerated Deployment:"
-        info "  • Application URL: http://localhost:8502"
-        info "  • Health Check: http://localhost:8502/_stcore/health"
+        info "  • Application URL: http://localhost:8501"
+        info "  • Health Check: http://localhost:8501/_stcore/health"
         info "  • Container: ai-rag-gpu"
     else
         info "CPU-Optimized Deployment:"
