@@ -67,7 +67,7 @@ services:
       retries: 3
       start_period: 60s
     
-  # GPU-accelerated service (production-ready)
+  # GPU-accelerated service (production-ready) - POP Server Optimized
   ai-rag-app-gpu:
     build: 
       context: .
@@ -115,14 +115,17 @@ services:
       - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
       - CUDA_LAUNCH_BLOCKING=0
       
-      # GPU-only mode for old CPU compatibility
+      # GPU-only mode for old CPU compatibility (POP server optimized)
       - SENTENCE_TRANSFORMERS_DEVICE=cuda
       - TRANSFORMERS_DEVICE=cuda
+      - FORCE_GPU_ONLY=true
+      - DISABLE_CPU_FALLBACK=true
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - NUMEXPR_NUM_THREADS=1
       - OPENBLAS_NUM_THREADS=1
       - VECLIB_MAXIMUM_THREADS=1
+      - BLAS_NUM_THREADS=1
     volumes:
       # Persistent data storage
       - ./data:/app/data:rw
@@ -141,10 +144,10 @@ services:
       resources:
         limits:
           memory: 20G  # Increased for RTX 3080 (24GB VRAM) GPU-only processing
-          cpus: '8.0'
+          cpus: '6.0'  # Reduced for 6-CPU POP server compatibility
         reservations:
           memory: 12G  # Higher reservation for AI model loading
-          cpus: '4.0'
+          cpus: '3.0'  # Adjusted for 6-CPU constraint
           devices:
             - driver: nvidia
               count: 1
@@ -204,7 +207,7 @@ services:
       resources:
         limits:
           memory: 16G
-          cpus: '8.0'
+          cpus: '6.0'  # Reduced for 6-CPU POP server compatibility
         reservations:
           devices:
             - driver: nvidia
