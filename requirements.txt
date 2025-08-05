@@ -37,6 +37,7 @@ numpy>=1.26.0
 matplotlib>=3.8.0
 plotly>=5.20.0
 simple-salesforce>=1.12.0
+py-cpuinfo>=9.0.0                # CPU instruction set detection for old hardware compatibility
 
 # Development Tools
 jupyter>=1.0.0

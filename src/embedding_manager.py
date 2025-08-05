@@ -5,6 +5,9 @@ import logging
 from datetime import datetime
 import pickle
 import hashlib
+import platform
+import cpuinfo
+import torch
 
 # Heavy imports moved to methods for faster startup
 try:
@@ -28,6 +31,9 @@ class EmbeddingManager:
                  cache_dir: str = "cache/embeddings",
                  dimensions: int = None):  # OpenAI embeddings dimension control
         
+        # CPU compatibility check for old hardware
+        self.gpu_only_mode = self._check_cpu_compatibility()
+        
         self.embedding_model = embedding_model
         
         # Auto-select appropriate model name if not provided
@@ -48,6 +54,10 @@ class EmbeddingManager:
         # Set up logging
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
+        
+        # Configure GPU-only mode if old CPU detected
+        if self.gpu_only_mode:
+            self._configure_gpu_only_mode()
 
         # Initialize embedding model
         self._initialize_model()
@@ -79,6 +89,95 @@ class EmbeddingManager:
         """Create a ColPali visual embedding manager (requires GPU for best performance)."""
         return cls(embedding_model="colpali", model_name=model_name)
 
+    def _check_cpu_compatibility(self) -> bool:
+        """
+        Check if CPU supports modern instruction sets required by AI libraries.
+        Returns True if GPU-only mode should be enforced (old CPU detected).
+        """
+        try:
+            # Check if we're in a container or production environment
+            if os.getenv('MODEL_DEVICE') == 'cuda':
+                self.logger.info("🚀 GPU-only mode enforced by MODEL_DEVICE=cuda")
+                return True
+            
+            # Get CPU information
+            cpu_info = cpuinfo.get_cpu_info()
+            cpu_brand = cpu_info.get('brand_raw', '').lower()
+            
+            # Check for known problematic old CPUs
+            old_cpu_patterns = [
+                'phenom ii x6 1090t',  # User's specific CPU
+                'phenom ii',
+                'phenom',
+                'athlon ii',
+                'athlon 64',
+                'core 2 duo',
+                'core 2 quad',
+                'pentium'
+            ]
+            
+            for pattern in old_cpu_patterns:
+                if pattern in cpu_brand:
+                    self.logger.warning(f"⚠️ OLD CPU DETECTED: {cpu_brand}")
+                    self.logger.warning("   This CPU lacks modern instruction sets (AVX, AVX2)")
+                    self.logger.warning("   Enforcing GPU-only mode to avoid 'Illegal instruction' errors")
+                    return True
+            
+            # Check CPU flags for modern instruction sets
+            cpu_flags = cpu_info.get('flags', [])
+            required_instructions = ['avx', 'avx2']
+            missing_instructions = [inst for inst in required_instructions if inst not in cpu_flags]
+            
+            if missing_instructions:
+                self.logger.warning(f"⚠️ CPU missing modern instructions: {missing_instructions}")
+                self.logger.warning("   Modern AI libraries may fail with 'Illegal instruction'")
+                self.logger.warning("   Enforcing GPU-only mode for compatibility")
+                return True
+            
+            # Check GPU availability
+            if torch.cuda.is_available():
+                gpu_count = torch.cuda.device_count()
+                gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
+                self.logger.info(f"✅ Modern CPU with GPU available: {gpu_name}")
+                self.logger.info("   GPU-only mode available but not required")
+                return False
+            else:
+                self.logger.info("✅ Modern CPU detected, no GPU-only enforcement needed")
+                return False
+                
+        except Exception as e:
+            self.logger.warning(f"⚠️ CPU compatibility check failed: {e}")
+            self.logger.warning("   Defaulting to GPU-only mode for safety")
+            return True
+    
+    def _configure_gpu_only_mode(self):
+        """Configure environment for GPU-only execution."""
+        self.logger.info("🔧 Configuring GPU-only execution mode...")
+        
+        # Set environment variables for GPU-only execution
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # Use first GPU only
+        os.environ['MODEL_DEVICE'] = 'cuda'
+        
+        # PyTorch GPU memory optimization for old systems
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512,garbage_collection_threshold:0.6'
+        
+        # Force GPU-only for sentence-transformers
+        os.environ['SENTENCE_TRANSFORMERS_DEVICE'] = 'cuda'
+        
+        # Disable CPU optimizations that might cause issues
+        os.environ['OMP_NUM_THREADS'] = '1'
+        os.environ['MKL_NUM_THREADS'] = '1'
+        
+        self.logger.info("✅ GPU-only environment configured")
+        
+        # Verify GPU availability
+        if not torch.cuda.is_available():
+            raise RuntimeError("GPU-only mode required but CUDA not available!")
+        
+        gpu_name = torch.cuda.get_device_name(0)
+        gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        self.logger.info(f"🎮 Using GPU: {gpu_name} ({gpu_memory:.1f}GB VRAM)")
+
     def _initialize_model(self):
         """Initialize the embedding model based on configuration."""
 
@@ -107,8 +206,28 @@ class EmbeddingManager:
             # Lazy import SentenceTransformer
             from sentence_transformers import SentenceTransformer
             
-            # Initialize local sentence transformer with proper model name
-            self.model = SentenceTransformer(self.model_name)
+            # Initialize local sentence transformer with GPU-only mode if required
+            if self.gpu_only_mode:
+                self.logger.info("🎮 Initializing SentenceTransformer in GPU-only mode")
+                # Force GPU device for sentence transformers
+                device = 'cuda' if torch.cuda.is_available() else None
+                if device is None:
+                    raise RuntimeError("GPU-only mode required but CUDA not available for SentenceTransformer!")
+                
+                self.model = SentenceTransformer(self.model_name, device=device)
+                
+                # Move model to GPU explicitly and clear any CPU memory
+                self.model = self.model.to(device)
+                
+                # Clear CPU cache to avoid memory issues
+                if hasattr(torch.cuda, 'empty_cache'):
+                    torch.cuda.empty_cache()
+                
+                self.logger.info(f"🎮 SentenceTransformer loaded on GPU: {torch.cuda.get_device_name(0)}")
+            else:
+                # Normal initialization for modern CPUs
+                self.model = SentenceTransformer(self.model_name)
+            
             self.embedding_dimension = self.model.get_sentence_embedding_dimension()
             self.logger.info(f"✅ Initialized local embeddings with model: {self.model_name}")
 
@@ -119,8 +238,16 @@ class EmbeddingManager:
             
             config = {
                 'colpali_model': self.model_name,
-                'cache_dir': self.cache_dir
+                'cache_dir': self.cache_dir,
+                'device': 'cuda' if (self.gpu_only_mode or torch.cuda.is_available()) else 'auto',
+                'gpu_only_mode': self.gpu_only_mode
             }
+            
+            if self.gpu_only_mode:
+                self.logger.info("🎮 Initializing ColPali in GPU-only mode")
+                if not torch.cuda.is_available():
+                    raise RuntimeError("GPU-only mode required but CUDA not available for ColPali!")
+            
             self.visual_processor = VisualDocumentProcessor(config)
             # ColPali uses 128-dimensional embeddings per patch
             self.embedding_dimension = 128

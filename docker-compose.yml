@@ -112,8 +112,17 @@ services:
       - TORCH_CUDA_ARCH_LIST=6.0;6.1;7.0;7.5;8.0;8.6;9.0
       
       # Memory and performance optimization
-      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
       - CUDA_LAUNCH_BLOCKING=0
+      
+      # GPU-only mode for old CPU compatibility
+      - SENTENCE_TRANSFORMERS_DEVICE=cuda
+      - TRANSFORMERS_DEVICE=cuda
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - VECLIB_MAXIMUM_THREADS=1
     volumes:
       # Persistent data storage
       - ./data:/app/data:rw
@@ -131,15 +140,16 @@ services:
     deploy:
       resources:
         limits:
-          memory: 16G
+          memory: 20G  # Increased for RTX 3080 (24GB VRAM) GPU-only processing
           cpus: '8.0'
         reservations:
-          memory: 8G
+          memory: 12G  # Higher reservation for AI model loading
           cpus: '4.0'
           devices:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+        # GPU-only mode optimized for old CPU compatibility (AMD Phenom II X6)
     healthcheck:
       test: ["CMD", "python", "scripts/health_check.py"]
       interval: 30s

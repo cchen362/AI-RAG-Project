@@ -41,6 +41,9 @@ from src.salesforce_connector import SalesforceConnector
 from src.colpali_retriever import ColPaliRetriever
 from src.cross_encoder_reranker import CrossEncoderReRanker
 
+# GPU configuration for old CPU compatibility
+from src.gpu_config import configure_gpu_for_old_cpu
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,6 +51,14 @@ logger = logging.getLogger(__name__)
 # Suppress excessive httpx logging from OpenAI API calls
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("openai").setLevel(logging.WARNING)
+
+# Initialize GPU configuration for old CPU compatibility
+try:
+    gpu_config = configure_gpu_for_old_cpu()
+    logger.info(f"🎮 GPU Configuration: gpu_only_mode={gpu_config.gpu_only_mode}, cpu_compatible={gpu_config.cpu_compatible}")
+except Exception as e:
+    logger.error(f"❌ GPU configuration failed: {e}")
+    gpu_config = None
 
 # Configure Streamlit page with file upload settings
 st.set_page_config(
@@ -611,9 +622,11 @@ class SimpleRAGOrchestrator:
             
             # Initialize CrossEncoderReRanker (always needed)
             logger.info("📊 Initializing cross-encoder re-ranker...")
+            reranker_gpu_only = gpu_config.gpu_only_mode if gpu_config else False
             self.reranker = CrossEncoderReRanker(
                 model_name='BAAI/bge-reranker-base',
-                relevance_threshold=0.3
+                relevance_threshold=0.3,
+                gpu_only_mode=reranker_gpu_only
             )
             if not self.reranker.initialize():
                 logger.warning("⚠️ Re-ranker initialization failed - using fallback scoring")
@@ -634,9 +647,20 @@ class SimpleRAGOrchestrator:
             logger.info("🔄 Ensuring vector database has correct dimensions...")
             self.text_rag.reinitialize_vector_database()
             
-            # Initialize ColPali retriever (production settings with GPU detection)
+            # Initialize ColPali retriever with GPU configuration for old CPU compatibility
             import torch
-            if torch.cuda.is_available():
+            
+            if gpu_config and gpu_config.gpu_only_mode:
+                logger.info("🎮 Initializing ColPali retriever (GPU-only mode for old CPU)")
+                colpali_config = {
+                    'model_name': 'vidore/colqwen2-v1.0',
+                    'device': 'cuda',
+                    'gpu_only_mode': True,
+                    'max_pages_per_doc': 50,
+                    'cache_embeddings': True,
+                    'cache_dir': 'cache/embeddings'
+                }
+            elif torch.cuda.is_available():
                 logger.info("🖼️ Initializing ColPali retriever (GPU detected)...")
                 colpali_config = {
                     'model_name': 'vidore/colqwen2-v1.0',

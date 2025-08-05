@@ -58,9 +58,67 @@ detect_os() {
     fi
 }
 
+# Check CPU compatibility for AI libraries
+check_cpu_compatibility() {
+    log "Checking CPU compatibility for AI workloads..."
+    
+    # Get CPU information
+    CPU_INFO=$(cat /proc/cpuinfo | grep "model name" | head -1 | cut -d: -f2 | xargs)
+    log "CPU: $CPU_INFO"
+    
+    # Check for old problematic CPUs
+    OLD_CPU_PATTERNS=("Phenom II" "Phenom" "Athlon II" "Athlon 64" "Core 2 Duo" "Core 2 Quad" "Pentium")
+    CPU_COMPATIBLE=true
+    
+    for pattern in "${OLD_CPU_PATTERNS[@]}"; do
+        if echo "$CPU_INFO" | grep -qi "$pattern"; then
+            warn "OLD CPU DETECTED: $CPU_INFO"
+            warn "This CPU may lack modern instruction sets (AVX, AVX2)"
+            warn "AI libraries may fail with 'Illegal instruction' errors"
+            warn "ENFORCING GPU-ONLY MODE for compatibility"
+            CPU_COMPATIBLE=false
+            export FORCE_GPU_ONLY=true
+            break
+        fi
+    done
+    
+    # Check for AVX/AVX2 support
+    if [ "$CPU_COMPATIBLE" = true ]; then
+        if ! grep -q avx /proc/cpuinfo; then
+            warn "CPU lacks AVX instruction set support"
+            warn "Modern AI libraries may have compatibility issues"
+            warn "ENFORCING GPU-ONLY MODE for safety"
+            CPU_COMPATIBLE=false
+            export FORCE_GPU_ONLY=true
+        elif ! grep -q avx2 /proc/cpuinfo; then
+            warn "CPU lacks AVX2 instruction set support"
+            warn "Some AI libraries may have reduced performance"
+            info "GPU-only mode recommended for optimal performance"
+        else
+            log "CPU supports modern instruction sets (AVX, AVX2) ✓"
+        fi
+    fi
+    
+    # Verify GPU availability if GPU-only mode is required
+    if [ "$FORCE_GPU_ONLY" = true ]; then
+        if ! command -v nvidia-smi &> /dev/null; then
+            error "GPU-only mode required but NVIDIA GPU not available!"
+        fi
+        
+        if ! nvidia-smi &> /dev/null; then
+            error "GPU-only mode required but GPU not accessible!"
+        fi
+        
+        log "GPU-only mode will be enforced due to CPU compatibility"
+    fi
+}
+
 # Check system requirements
 check_system_requirements() {
     log "Checking system requirements..."
+    
+    # Check CPU compatibility first
+    check_cpu_compatibility
     
     # Check available memory
     TOTAL_MEM=$(free -g | awk '/^Mem:/{print $2}')
@@ -229,8 +287,14 @@ setup_project() {
 build_images() {
     log "Building Docker images..."
     
-    # Check if GPU is available for GPU build
-    if command -v nvidia-smi &> /dev/null && docker run --rm --gpus all nvidia/cuda:12.1-base-ubuntu20.04 nvidia-smi &> /dev/null; then
+    # If GPU-only mode is forced, only build GPU image
+    if [ "$FORCE_GPU_ONLY" = true ]; then
+        log "🎮 Building GPU-ONLY image for old CPU compatibility..."
+        docker build --target gpu-production -t ai-rag-app:gpu .
+        log "GPU-only Docker image built successfully ✓"
+        
+    # Check if GPU is available for GPU build (normal case)
+    elif command -v nvidia-smi &> /dev/null && docker run --rm --gpus all nvidia/cuda:12.1-base-ubuntu20.04 nvidia-smi &> /dev/null; then
         log "Building both CPU and GPU images..."
         docker build --target cpu-production -t ai-rag-app:cpu .
         docker build --target gpu-production -t ai-rag-app:gpu .
@@ -246,8 +310,30 @@ build_images() {
 deploy_application() {
     log "Deploying application..."
     
-    # Check if GPU deployment is possible
-    if command -v nvidia-smi &> /dev/null && docker run --rm --gpus all nvidia/cuda:12.1-base-ubuntu20.04 nvidia-smi &> /dev/null; then
+    # Force GPU deployment if old CPU detected
+    if [ "$FORCE_GPU_ONLY" = true ]; then
+        log "🎮 ENFORCING GPU-ONLY DEPLOYMENT due to old CPU compatibility"
+        log "Starting GPU-only deployment for AMD Phenom II X6 1090T compatibility..."
+        
+        # Set environment variables for GPU-only mode
+        export MODEL_DEVICE=cuda
+        export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
+        
+        docker-compose --profile gpu up -d ai-rag-app-gpu
+        
+        # Wait for health check
+        log "Waiting for GPU-only application to start..."
+        sleep 45  # Extra time for GPU model loading
+        
+        if curl -f http://localhost:8502/_stcore/health &> /dev/null; then
+            log "🚀 GPU-ONLY deployment successful! Application available at: http://localhost:8502"
+            log "✅ Old CPU compatibility ensured - all AI processing on RTX 3080"
+        else
+            warn "GPU-only deployment may have issues. Check logs: docker-compose logs ai-rag-app-gpu"
+        fi
+        
+    # Check if GPU deployment is possible (normal case)
+    elif command -v nvidia-smi &> /dev/null && docker run --rm --gpus all nvidia/cuda:12.1-base-ubuntu20.04 nvidia-smi &> /dev/null; then
         log "Starting GPU-accelerated deployment..."
         docker-compose --profile gpu up -d ai-rag-app-gpu
         

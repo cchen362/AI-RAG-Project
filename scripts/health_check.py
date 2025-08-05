@@ -78,6 +78,31 @@ def check_model_cache():
     else:
         return False, f"No model cache directories found: {missing}"
 
+def check_cpu_compatibility():
+    """Check CPU compatibility for AI libraries"""
+    try:
+        # Check if GPU-only mode is enforced
+        model_device = os.getenv('MODEL_DEVICE', 'auto')
+        if model_device == 'cuda':
+            return True, "GPU-only mode enforced - CPU compatibility not required"
+        
+        # Try to import AI libraries that might fail on old CPUs
+        try:
+            import sentence_transformers
+            import torch
+            
+            # Test basic tensor operations that require modern instruction sets
+            test_tensor = torch.randn(10, 10)
+            test_result = torch.matmul(test_tensor, test_tensor.t())
+            
+            return True, "CPU compatible with AI libraries"
+            
+        except Exception as e:
+            return False, f"CPU compatibility issue: {e}"
+            
+    except Exception as e:
+        return False, f"CPU compatibility check failed: {e}"
+
 def check_gpu_availability():
     """Check GPU availability and CUDA setup"""
     try:
@@ -140,6 +165,7 @@ def main():
     checks = [
         ("Environment", check_environment),
         ("Docker Config", check_docker_optimization),
+        ("CPU Compatibility", check_cpu_compatibility),
         ("Model Cache", check_model_cache),
         ("Model Manifest", check_model_manifest),
         ("GPU/CUDA", check_gpu_availability),

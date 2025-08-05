@@ -32,6 +32,7 @@ class VisualDocumentProcessor:
         """Initialize the visual document processor."""
         self.config = config
         self.model_name = config.get('colpali_model', 'vidore/colqwen2-v1.0')
+        self.gpu_only_mode = config.get('gpu_only_mode', False)
         self.device = self._detect_device()
         self.cache_dir = config.get('cache_dir', 'cache/embeddings')
         
@@ -45,17 +46,53 @@ class VisualDocumentProcessor:
         
         logger.info(f"🔧 VisualDocumentProcessor initialized for {self.model_name}")
         logger.info(f"🖥️ Device: {self.device}")
+        if self.gpu_only_mode:
+            logger.info("🎮 GPU-only mode enforced for old CPU compatibility")
     
     def _detect_device(self) -> str:
         """Detect optimal device (GPU/CPU) for processing."""
-        if torch.cuda.is_available():
+        
+        # Check for explicit device configuration
+        config_device = self.config.get('device', 'auto')
+        
+        if config_device == 'cuda' or self.gpu_only_mode:
+            # Force GPU mode
+            if not torch.cuda.is_available():
+                raise RuntimeError("GPU-only mode required but CUDA not available!")
+            
             device = "cuda"
             gpu_name = torch.cuda.get_device_name(0)
-            logger.info(f"🚀 GPU detected: {gpu_name}")
-        else:
+            gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            logger.info(f"🎮 Forced GPU mode: {gpu_name} ({gpu_memory:.1f}GB VRAM)")
+            
+            # Configure GPU memory optimization for old systems
+            if self.gpu_only_mode:
+                # Set memory management for production servers
+                os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512,garbage_collection_threshold:0.6'
+                logger.info("🔧 GPU memory optimization configured for old system compatibility")
+            
+            return device
+            
+        elif config_device == 'cpu':
+            # Force CPU mode (but check if safe on old systems)
+            if self.gpu_only_mode:
+                raise RuntimeError("GPU-only mode required but CPU device forced!")
             device = "cpu"
-            logger.info("💻 Using CPU (GPU not available)")
-        return device
+            logger.info("💻 Forced CPU mode")
+            return device
+            
+        else:
+            # Auto-detect (default behavior)
+            if torch.cuda.is_available():
+                device = "cuda"
+                gpu_name = torch.cuda.get_device_name(0)
+                logger.info(f"🚀 Auto-detected GPU: {gpu_name}")
+            else:
+                if self.gpu_only_mode:
+                    raise RuntimeError("GPU-only mode required but no GPU available!")
+                device = "cpu"
+                logger.info("💻 Auto-detected CPU (GPU not available)")
+            return device
     
     def _load_model(self):
         """Load ColPali model and processor."""
@@ -80,9 +117,18 @@ class VisualDocumentProcessor:
             if use_colpali_engine:
                 # Try ColPali engine first (latest API)
                 try:
-                    # Determine optimal settings
+                    # Determine optimal settings with GPU-only enforcement
+                    if self.gpu_only_mode and self.device != "cuda":
+                        raise RuntimeError("GPU-only mode required but device is not CUDA!")
+                    
                     torch_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
                     attn_implementation = "flash_attention_2" if (self.device == "cuda" and is_flash_attn_2_available()) else None
+                    
+                    # GPU memory cleanup before loading
+                    if self.device == "cuda":
+                        torch.cuda.empty_cache()
+                        initial_memory = torch.cuda.memory_allocated(0) / 1024**3
+                        logger.info(f"🧹 GPU memory before loading: {initial_memory:.2f}GB")
                     
                     logger.info(f"🔧 Loading with dtype: {torch_dtype}, attention: {attn_implementation}")
                     
@@ -99,6 +145,17 @@ class VisualDocumentProcessor:
                         trust_remote_code=True
                     )
                     
+                    # Ensure model is on GPU if required
+                    if self.gpu_only_mode:
+                        self.model = self.model.to(self.device)
+                        logger.info(f"🎮 Model explicitly moved to {self.device}")
+                    
+                    # GPU memory status after loading
+                    if self.device == "cuda":
+                        final_memory = torch.cuda.memory_allocated(0) / 1024**3
+                        model_memory = final_memory - initial_memory
+                        logger.info(f"🎮 Model loaded: {model_memory:.2f}GB VRAM used")
+                    
                     logger.info("✅ ColQwen2 models loaded successfully")
                     
                 except Exception as engine_error:
@@ -110,8 +167,18 @@ class VisualDocumentProcessor:
                 logger.info("🔄 Using transformers fallback")
                 from transformers import AutoModel, AutoProcessor
                 
+                # GPU-only enforcement for fallback
+                if self.gpu_only_mode and self.device != "cuda":
+                    raise RuntimeError("GPU-only mode required but device is not CUDA!")
+                
                 torch_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
                 attn_implementation = "flash_attention_2" if (self.device == "cuda" and is_flash_attn_2_available()) else None
+                
+                # GPU memory cleanup before loading
+                if self.device == "cuda":
+                    torch.cuda.empty_cache()
+                    initial_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    logger.info(f"🧹 GPU memory before fallback loading: {initial_memory:.2f}GB")
                 
                 self.model = AutoModel.from_pretrained(
                     self.model_name,
@@ -125,6 +192,17 @@ class VisualDocumentProcessor:
                     self.model_name,
                     trust_remote_code=True
                 )
+                
+                # Ensure model is on GPU if required
+                if self.gpu_only_mode:
+                    self.model = self.model.to(self.device)
+                    logger.info(f"🎮 Fallback model explicitly moved to {self.device}")
+                
+                # GPU memory status after loading
+                if self.device == "cuda":
+                    final_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    model_memory = final_memory - initial_memory
+                    logger.info(f"🎮 Fallback model loaded: {model_memory:.2f}GB VRAM used")
             
             load_time = time.time() - start_time
             logger.info(f"✅ Model loaded in {load_time:.2f}s")
@@ -453,6 +531,13 @@ class VisualDocumentProcessor:
                 
                 logger.info(f"✅ Generated embeddings shape: {embeddings.shape}")
                 logger.info(f"✅ Embeddings dtype: {embeddings.dtype}, device: {embeddings.device}")
+                
+                # GPU memory cleanup after processing
+                if self.device == "cuda" and self.gpu_only_mode:
+                    torch.cuda.empty_cache()
+                    current_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    logger.info(f"🧹 GPU memory after processing: {current_memory:.2f}GB")
+                
                 return embeddings
             
         except Exception as e:
@@ -556,6 +641,12 @@ class VisualDocumentProcessor:
                 
                 # Calculate MaxSim scores
                 scores = self._calculate_maxsim_scores(query_embedding, document_embeddings)
+                
+                # GPU memory cleanup after query processing
+                if self.device == "cuda" and self.gpu_only_mode:
+                    torch.cuda.empty_cache()
+                    current_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    logger.info(f"🧹 GPU memory after query: {current_memory:.2f}GB")
             
             return scores
             

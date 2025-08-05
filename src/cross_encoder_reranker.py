@@ -5,6 +5,8 @@ Uses BGE model to rank and select single best source
 
 import logging
 import time
+import os
+import torch
 from typing import List, Dict, Any, Optional
 import numpy as np
 
@@ -19,20 +21,26 @@ class CrossEncoderReRanker:
     """
     
     def __init__(self, model_name: str = 'BAAI/bge-reranker-base', 
-                 relevance_threshold: float = 0.0):
+                 relevance_threshold: float = 0.0,
+                 gpu_only_mode: bool = False):
         """
         Initialize the cross-encoder re-ranker.
         
         Args:
             model_name: HuggingFace model for cross-encoding
             relevance_threshold: Deprecated - threshold removed for better reliability
+            gpu_only_mode: Force GPU-only execution for old CPU compatibility
         """
         self.model_name = model_name
         self.threshold = relevance_threshold  # Kept for compatibility but not used
+        self.gpu_only_mode = gpu_only_mode or (os.getenv('MODEL_DEVICE') == 'cuda')
         self.model = None
         self.is_initialized = False
         
-        logger.info(f"🎯 CrossEncoderReRanker configured with model: {model_name}")
+        if self.gpu_only_mode:
+            logger.info(f"🎯 CrossEncoderReRanker configured with model: {model_name} (GPU-only mode)")
+        else:
+            logger.info(f"🎯 CrossEncoderReRanker configured with model: {model_name}")
     
     
     
@@ -92,10 +100,32 @@ class CrossEncoderReRanker:
             from sentence_transformers import CrossEncoder
             logger.info(f"🔧 Loading cross-encoder model: {self.model_name}")
             
-            # Load the BGE reranker model
-            self.model = CrossEncoder(self.model_name)
-            self.is_initialized = True
+            # GPU-only mode configuration
+            if self.gpu_only_mode:
+                if not torch.cuda.is_available():
+                    raise RuntimeError("GPU-only mode required but CUDA not available for CrossEncoder!")
+                
+                logger.info("🎮 Initializing CrossEncoder in GPU-only mode")
+                device = 'cuda'
+                
+                # GPU memory cleanup before loading
+                torch.cuda.empty_cache()
+                initial_memory = torch.cuda.memory_allocated(0) / 1024**3
+                logger.info(f"🧹 GPU memory before CrossEncoder loading: {initial_memory:.2f}GB")
+                
+                # Load the BGE reranker model on GPU
+                self.model = CrossEncoder(self.model_name, device=device)
+                
+                # GPU memory status after loading
+                final_memory = torch.cuda.memory_allocated(0) / 1024**3
+                model_memory = final_memory - initial_memory
+                logger.info(f"🎮 CrossEncoder loaded: {model_memory:.2f}GB VRAM used")
+                
+            else:
+                # Standard initialization
+                self.model = CrossEncoder(self.model_name)
             
+            self.is_initialized = True
             logger.info("✅ Cross-encoder model loaded successfully")
             return True
             
