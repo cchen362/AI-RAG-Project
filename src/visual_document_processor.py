@@ -14,6 +14,8 @@ import torch
 import platform
 import shutil
 from pathlib import Path
+from PIL import Image, ImageStat, ImageFilter
+import cv2
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +45,14 @@ class VisualDocumentProcessor:
         # Create cache directory
         os.makedirs(self.cache_dir, exist_ok=True)
         
+        # Dynamic batching configuration for memory optimization
+        self.max_batch_size = 4 if self.device == "cuda" else 2
+        self.min_batch_size = 1
+        self.current_batch_size = self.max_batch_size
+        
         logger.info(f"🔧 VisualDocumentProcessor initialized for {self.model_name}")
         logger.info(f"🖥️ Device: {self.device}")
+        logger.info(f"🔄 Dynamic batching: max={self.max_batch_size}, current={self.current_batch_size}")
     
     def _detect_device(self) -> str:
         """Detect optimal device (GPU/CPU) for processing."""
@@ -54,13 +62,544 @@ class VisualDocumentProcessor:
             gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
             logger.info(f"🚀 GPU detected: {gpu_name} ({gpu_memory:.1f}GB VRAM)")
             
-            # Configure GPU memory optimization for 6GB constraints
-            os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:512'
-            logger.info("🔧 GPU memory optimization configured for 6GB constraints")
+            # Enhanced GPU memory optimization for 6GB RTX 1060 constraints
+            memory_config = 'expandable_segments:True,max_split_size_mb:256,roundup_power2_divisions:8'
+            os.environ['PYTORCH_CUDA_ALLOC_CONF'] = memory_config
+            
+            # Additional memory optimization environment variables
+            os.environ['CUDA_LAUNCH_BLOCKING'] = '0'  # Async operations
+            os.environ['TORCH_CUDNN_V8_API_ENABLED'] = '1'  # CuDNN optimizations
+            
+            logger.info("🔧 Enhanced GPU memory optimization configured for RTX 1060 6GB")
+            logger.info(f"   - Memory allocation: {memory_config}")
+            
+            # Set memory management parameters
+            self.gpu_memory_limit = gpu_memory * 0.85  # Use 85% of available VRAM
+            self.memory_cleanup_threshold = gpu_memory * 0.75  # Cleanup at 75%
+            
+            logger.info(f"   - Memory limit: {self.gpu_memory_limit:.2f}GB")
+            logger.info(f"   - Cleanup threshold: {self.memory_cleanup_threshold:.2f}GB")
+            
         else:
             device = "cpu"
             logger.info("💻 Using CPU (GPU not available)")
         return device
+    
+    def _get_current_memory_usage(self) -> float:
+        """Get current GPU memory usage in GB."""
+        if self.device == "cuda" and torch.cuda.is_available():
+            return torch.cuda.memory_allocated(0) / 1024**3
+        return 0.0
+    
+    def _cleanup_gpu_memory(self, force: bool = False):
+        """Clean up GPU memory when needed."""
+        if self.device != "cuda":
+            return
+            
+        current_memory = self._get_current_memory_usage()
+        
+        if force or current_memory > self.memory_cleanup_threshold:
+            logger.info(f"🧹 GPU memory cleanup triggered: {current_memory:.2f}GB")
+            torch.cuda.empty_cache()
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            
+            new_memory = self._get_current_memory_usage()
+            freed = current_memory - new_memory
+            logger.info(f"   - Freed: {freed:.2f}GB, Current: {new_memory:.2f}GB")
+    
+    def _check_memory_available(self, required_mb: float = 530) -> bool:
+        """Check if enough GPU memory is available for operation."""
+        if self.device != "cuda":
+            return True
+            
+        current_memory_gb = self._get_current_memory_usage()
+        required_gb = required_mb / 1024
+        available_gb = self.gpu_memory_limit - current_memory_gb
+        
+        logger.info(f"🔍 Memory check: Current={current_memory_gb:.2f}GB, Required={required_gb:.2f}GB, Available={available_gb:.2f}GB")
+        
+        return available_gb >= required_gb
+    
+    def _adjust_batch_size(self, memory_used_gb: float):
+        """Dynamically adjust batch size based on memory usage."""
+        if self.device != "cuda":
+            return
+            
+        # Calculate optimal batch size based on available memory
+        available_memory = self.gpu_memory_limit - memory_used_gb
+        
+        if available_memory > 1.5:  # Plenty of memory
+            new_batch_size = self.max_batch_size
+        elif available_memory > 1.0:  # Moderate memory
+            new_batch_size = max(2, self.max_batch_size // 2)
+        elif available_memory > 0.5:  # Limited memory
+            new_batch_size = 1
+        else:  # Critical memory
+            logger.warning("⚠️ Critical memory situation, consider CPU fallback")
+            new_batch_size = 1
+            
+        if new_batch_size != self.current_batch_size:
+            logger.info(f"🔄 Adjusting batch size: {self.current_batch_size} → {new_batch_size}")
+            self.current_batch_size = new_batch_size
+    
+    def analyze_visual_complexity(self, image: Image.Image) -> Dict[str, Any]:
+        """
+        Analyze visual complexity of a page to determine processing needs.
+        Returns analysis with visual_score and processing recommendations.
+        """
+        try:
+            # Convert PIL to numpy array for analysis
+            img_array = np.array(image)
+            
+            # Convert to grayscale for analysis
+            if len(img_array.shape) == 3:
+                gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+            else:
+                gray = img_array
+            
+            # 1. Color variance analysis (high variance = complex visuals)
+            variance_score = np.var(gray) / 10000.0  # Normalize to 0-1 range
+            
+            # 2. Edge density analysis (charts/diagrams have many edges)
+            edges = cv2.Canny(gray, 50, 150)
+            edge_density = np.sum(edges > 0) / (edges.shape[0] * edges.shape[1])
+            
+            # 3. Contour analysis (detect non-text elements)
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # Filter out small contours (likely text)
+            significant_contours = [c for c in contours if cv2.contourArea(c) > 500]
+            contour_score = len(significant_contours) / 100.0  # Normalize
+            
+            # 4. Layout analysis using image statistics
+            # High standard deviation in pixel values suggests varied content
+            img_stats = ImageStat.Stat(image)
+            if hasattr(img_stats, 'stddev'):
+                layout_complexity = np.mean(img_stats.stddev) / 128.0
+            else:
+                layout_complexity = 0.3  # Default moderate complexity
+            
+            # Combine scores (weighted)
+            visual_score = (
+                variance_score * 0.3 +
+                edge_density * 0.3 +
+                contour_score * 0.2 +
+                layout_complexity * 0.2
+            )
+            
+            # Normalize to 0-1 range
+            visual_score = min(1.0, max(0.0, visual_score))
+            
+            # Classification
+            if visual_score > 0.6:
+                complexity_level = "high"
+                recommendation = "visual_processing"
+            elif visual_score > 0.3:
+                complexity_level = "medium" 
+                recommendation = "hybrid_processing"
+            else:
+                complexity_level = "low"
+                recommendation = "text_processing"
+            
+            return {
+                'visual_score': visual_score,
+                'complexity_level': complexity_level,
+                'recommendation': recommendation,
+                'metrics': {
+                    'variance_score': variance_score,
+                    'edge_density': edge_density,
+                    'contour_count': len(significant_contours),
+                    'layout_complexity': layout_complexity
+                }
+            }
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Visual complexity analysis failed: {e}")
+            # Return safe defaults
+            return {
+                'visual_score': 0.5,
+                'complexity_level': "medium",
+                'recommendation': "hybrid_processing",
+                'metrics': {}
+            }
+    
+    def analyze_query_intent(self, query: str) -> Dict[str, Any]:
+        """Analyze query to determine if visual processing is beneficial."""
+        visual_keywords = {
+            'chart': 0.8, 'graph': 0.8, 'diagram': 0.9, 'figure': 0.7, 'table': 0.8,
+            'plot': 0.8, 'visualization': 0.9, 'architecture': 0.7, 'flowchart': 0.9,
+            'schema': 0.8, 'performance': 0.6, 'comparison': 0.5, 'results': 0.4,
+            'data': 0.3, 'analysis': 0.3, 'layout': 0.7, 'design': 0.6, 'structure': 0.5
+        }
+        
+        query_lower = query.lower()
+        max_visual_intent = 0.0
+        matched_keywords = []
+        
+        for keyword, weight in visual_keywords.items():
+            if keyword in query_lower:
+                max_visual_intent = max(max_visual_intent, weight)
+                matched_keywords.append(keyword)
+        
+        # Determine intent level
+        if max_visual_intent > 0.7:
+            intent_level = "high"
+            recommendation = "prioritize_visual"
+        elif max_visual_intent > 0.4:
+            intent_level = "medium"
+            recommendation = "hybrid_processing"
+        else:
+            intent_level = "low" 
+            recommendation = "text_preferred"
+        
+        return {
+            'visual_intent_score': max_visual_intent,
+            'intent_level': intent_level,
+            'recommendation': recommendation,
+            'matched_keywords': matched_keywords
+        }
+    
+    def process_file_adaptive(self, file_path: str, query: str = None) -> Dict[str, Any]:
+        """
+        Adaptive processing that combines visual complexity analysis with memory optimization.
+        
+        Args:
+            file_path: Path to PDF file
+            query: Optional query to guide processing decisions
+            
+        Returns:
+            Dict containing processing results with adaptive decisions
+        """
+        if not file_path.lower().endswith('.pdf'):
+            return {
+                'status': 'error',
+                'error': 'Only PDF files are supported for visual processing'
+            }
+        
+        if not os.path.exists(file_path):
+            return {
+                'status': 'error',
+                'error': f'File not found: {file_path}'
+            }
+        
+        try:
+            logger.info(f"🎯 Adaptive processing: {os.path.basename(file_path)}")
+            start_time = time.time()
+            
+            # Analyze query intent if provided
+            query_analysis = self.analyze_query_intent(query) if query else {
+                'visual_intent_score': 0.5,
+                'intent_level': 'medium',
+                'recommendation': 'hybrid_processing',
+                'matched_keywords': []
+            }
+            
+            logger.info(f"🔍 Query analysis: {query_analysis['intent_level']} intent ({query_analysis['visual_intent_score']:.2f})")
+            
+            # Convert PDF to images for analysis
+            images = self._convert_pdf_to_images(file_path)
+            if not images:
+                return {
+                    'status': 'error',
+                    'error': 'Failed to convert PDF to images'
+                }
+            
+            # Analyze each page for visual complexity
+            page_analyses = []
+            total_visual_score = 0
+            
+            for i, image in enumerate(images):
+                page_analysis = self.analyze_visual_complexity(image)
+                page_analyses.append(page_analysis)
+                total_visual_score += page_analysis['visual_score']
+                
+                logger.info(f"   Page {i+1}: {page_analysis['complexity_level']} complexity ({page_analysis['visual_score']:.2f})")
+            
+            avg_visual_score = total_visual_score / len(images)
+            
+            # Make adaptive processing decision
+            processing_decision = self._make_processing_decision(
+                query_analysis, page_analyses, avg_visual_score
+            )
+            
+            logger.info(f"🎯 Processing decision: {processing_decision['strategy']} - {processing_decision['reason']}")
+            
+            # Execute processing based on decision
+            if processing_decision['strategy'] == 'visual_priority':
+                result = self._process_visual_priority(images, file_path, processing_decision)
+            elif processing_decision['strategy'] == 'hybrid':
+                result = self._process_hybrid(images, file_path, processing_decision)
+            elif processing_decision['strategy'] == 'text_fallback':
+                result = self._process_text_fallback(images, file_path, processing_decision)
+            else:
+                # Default to memory-aware visual processing
+                result = self._process_memory_aware_visual(images, file_path, processing_decision)
+            
+            processing_time = time.time() - start_time
+            result['processing_time'] = processing_time
+            result['adaptive_analysis'] = {
+                'query_analysis': query_analysis,
+                'page_analyses': page_analyses,
+                'avg_visual_score': avg_visual_score,
+                'processing_decision': processing_decision
+            }
+            
+            logger.info(f"✅ Adaptive processing completed in {processing_time:.2f}s")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Adaptive processing failed: {e}")
+            # Fallback to original processing method
+            return self.process_file(file_path)
+    
+    def _make_processing_decision(self, query_analysis: Dict, page_analyses: List[Dict], avg_visual_score: float) -> Dict[str, Any]:
+        """Make intelligent processing decision based on analysis."""
+        
+        # Check memory availability
+        memory_available = self._check_memory_available(required_mb=530)
+        current_memory = self._get_current_memory_usage()
+        
+        # Count high-complexity pages
+        high_complexity_pages = sum(1 for p in page_analyses if p['visual_score'] > 0.6)
+        medium_complexity_pages = sum(1 for p in page_analyses if 0.3 <= p['visual_score'] <= 0.6)
+        
+        # Decision logic
+        if not memory_available:
+            return {
+                'strategy': 'text_fallback',
+                'reason': f'Insufficient GPU memory ({current_memory:.2f}GB used)',
+                'pages_to_process': []
+            }
+        
+        if query_analysis['visual_intent_score'] > 0.7:
+            # High query intent for visual - try to process all pages
+            return {
+                'strategy': 'visual_priority',
+                'reason': f'High visual query intent ({query_analysis["visual_intent_score"]:.2f})',
+                'pages_to_process': list(range(len(page_analyses)))
+            }
+        
+        if avg_visual_score > 0.5 and high_complexity_pages > len(page_analyses) * 0.3:
+            # Many visually complex pages
+            visual_pages = [i for i, p in enumerate(page_analyses) if p['visual_score'] > 0.4]
+            return {
+                'strategy': 'hybrid',
+                'reason': f'Mixed content ({high_complexity_pages} high-complexity pages)',
+                'pages_to_process': visual_pages
+            }
+        
+        if avg_visual_score < 0.3:
+            # Mostly text content
+            return {
+                'strategy': 'text_fallback',
+                'reason': f'Low visual complexity ({avg_visual_score:.2f})',
+                'pages_to_process': []
+            }
+        
+        # Default: Memory-aware visual processing
+        return {
+            'strategy': 'memory_aware_visual',
+            'reason': f'Balanced approach (avg score: {avg_visual_score:.2f})',
+            'pages_to_process': list(range(len(page_analyses)))
+        }
+    
+    def _process_visual_priority(self, images: List[Image.Image], file_path: str, decision: Dict) -> Dict[str, Any]:
+        """Process with visual priority - attempt to process all pages with ColPali."""
+        logger.info("🎯 Processing with visual priority strategy")
+        
+        try:
+            self._load_model()
+            
+            # Process with aggressive memory management
+            embeddings = self._generate_embeddings_memory_aware(images)
+            
+            return {
+                'status': 'success',
+                'file_path': file_path,
+                'embeddings': embeddings,
+                'strategy': 'visual_priority',
+                'metadata': {
+                    'page_count': len(images),
+                    'model_name': self.model_name,
+                    'device': self.device,
+                    'batch_size': self.current_batch_size
+                }
+            }
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Visual priority failed: {e}, falling back to hybrid")
+            return self._process_hybrid(images, file_path, decision)
+    
+    def _process_hybrid(self, images: List[Image.Image], file_path: str, decision: Dict) -> Dict[str, Any]:
+        """Process using hybrid approach - visual for complex pages, text for simple ones."""
+        logger.info("🎯 Processing with hybrid strategy")
+        
+        try:
+            pages_to_process = decision.get('pages_to_process', [])
+            
+            if not pages_to_process:
+                # No visual pages identified, fall back to text
+                return self._process_text_fallback(images, file_path, decision)
+            
+            self._load_model()
+            
+            # Process only selected pages with visual analysis
+            selected_images = [images[i] for i in pages_to_process]
+            embeddings = self._generate_embeddings_memory_aware(selected_images)
+            
+            # For simplicity, map embeddings back to full page indices
+            # In a more sophisticated implementation, you'd handle text processing for other pages
+            full_embeddings = embeddings  # Simplified for now
+            
+            return {
+                'status': 'success', 
+                'file_path': file_path,
+                'embeddings': full_embeddings,
+                'strategy': 'hybrid',
+                'metadata': {
+                    'page_count': len(images),
+                    'visual_pages': pages_to_process,
+                    'model_name': self.model_name,
+                    'device': self.device,
+                    'batch_size': self.current_batch_size
+                }
+            }
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Hybrid processing failed: {e}, falling back to text")
+            return self._process_text_fallback(images, file_path, decision)
+    
+    def _process_text_fallback(self, images: List[Image.Image], file_path: str, decision: Dict) -> Dict[str, Any]:
+        """Process using text extraction fallback when visual processing not suitable."""
+        logger.info("🎯 Processing with text fallback strategy")
+        
+        try:
+            # For text fallback, return empty embeddings but provide metadata
+            # The higher-level system will handle text-only processing
+            return {
+                'status': 'success',
+                'file_path': file_path,
+                'embeddings': None,  # No visual embeddings
+                'strategy': 'text_fallback',
+                'metadata': {
+                    'page_count': len(images),
+                    'reason': decision.get('reason', 'Low visual complexity'),
+                    'recommendation': 'use_text_rag'
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Text fallback failed: {e}")
+            return {
+                'status': 'error',
+                'error': f'All processing strategies failed: {e}',
+                'file_path': file_path
+            }
+    
+    def _process_memory_aware_visual(self, images: List[Image.Image], file_path: str, decision: Dict) -> Dict[str, Any]:
+        """Process with memory-aware visual processing."""
+        logger.info("🎯 Processing with memory-aware visual strategy")
+        
+        try:
+            self._load_model()
+            
+            # Use the enhanced memory-aware embedding generation
+            embeddings = self._generate_embeddings_memory_aware(images)
+            
+            return {
+                'status': 'success',
+                'file_path': file_path,
+                'embeddings': embeddings,
+                'strategy': 'memory_aware_visual',
+                'metadata': {
+                    'page_count': len(images),
+                    'model_name': self.model_name,
+                    'device': self.device,
+                    'batch_size': self.current_batch_size
+                }
+            }
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Memory-aware visual failed: {e}, falling back to text")
+            return self._process_text_fallback(images, file_path, decision)
+    
+    def _generate_embeddings_memory_aware(self, images: List[Image.Image]) -> torch.Tensor:
+        """Generate embeddings with aggressive memory management."""
+        logger.info(f"🧠 Generating embeddings for {len(images)} pages (batch_size={self.current_batch_size})")
+        
+        all_embeddings = []
+        
+        try:
+            # Process images in batches with memory monitoring
+            for i in range(0, len(images), self.current_batch_size):
+                batch_end = min(i + self.current_batch_size, len(images))
+                batch_images = images[i:batch_end]
+                
+                logger.info(f"   Processing batch {i//self.current_batch_size + 1}: pages {i+1}-{batch_end}")
+                
+                # Check memory before processing
+                current_memory = self._get_current_memory_usage()
+                
+                if current_memory > self.memory_cleanup_threshold:
+                    logger.info(f"🧹 Memory cleanup before batch: {current_memory:.2f}GB")
+                    self._cleanup_gpu_memory(force=True)
+                    
+                    # Adjust batch size if still high memory usage
+                    if current_memory > self.gpu_memory_limit * 0.8:
+                        self._adjust_batch_size(current_memory)
+                        if self.current_batch_size < len(batch_images):
+                            # Re-process with smaller batch
+                            batch_images = batch_images[:self.current_batch_size]
+                            batch_end = i + self.current_batch_size
+                
+                # Generate embeddings for batch with mixed precision
+                with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+                    batch_embeddings = self._generate_batch_embeddings(batch_images)
+                    
+                all_embeddings.append(batch_embeddings)
+                
+                # Cleanup after each batch
+                if self.device == "cuda":
+                    torch.cuda.empty_cache()
+                
+                logger.info(f"   ✅ Batch completed, memory: {self._get_current_memory_usage():.2f}GB")
+            
+            # Concatenate all embeddings
+            if all_embeddings:
+                final_embeddings = torch.cat(all_embeddings, dim=0)
+                logger.info(f"✅ Generated embeddings: {final_embeddings.shape}")
+                return final_embeddings
+            else:
+                logger.error("❌ No embeddings generated")
+                return torch.empty(0)
+                
+        except Exception as e:
+            logger.error(f"❌ Memory-aware embedding generation failed: {e}")
+            raise
+    
+    def _generate_batch_embeddings(self, images: List[Image.Image]) -> torch.Tensor:
+        """Generate embeddings for a batch of images."""
+        try:
+            # Process images with the model processor
+            inputs = self.processor.process_images(images).to(self.device)
+            
+            # Generate embeddings with memory-efficient forward pass
+            with torch.no_grad():
+                embeddings = self.model(**inputs)
+                
+            # Convert to appropriate format and move to CPU to save GPU memory
+            if isinstance(embeddings, dict) and 'last_hidden_state' in embeddings:
+                embeddings = embeddings['last_hidden_state']
+            
+            # Keep on GPU for now, will move to CPU later if needed
+            return embeddings
+            
+        except Exception as e:
+            logger.error(f"❌ Batch embedding generation failed: {e}")
+            raise
     
     def _load_model(self):
         """Load ColPali model and processor."""
@@ -85,17 +624,26 @@ class VisualDocumentProcessor:
             if use_colpali_engine:
                 # Try ColPali engine first (latest API)
                 try:
-                    # Determine optimal settings
+                    # Enhanced memory-aware model loading for RTX 1060 6GB
+                    self._cleanup_gpu_memory(force=True)  # Aggressive cleanup before loading
+                    
+                    # Optimal settings for 6GB GPU
                     torch_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
                     attn_implementation = "flash_attention_2" if (self.device == "cuda" and is_flash_attn_2_available()) else None
                     
-                    # GPU memory cleanup before loading
+                    # Memory monitoring
                     if self.device == "cuda":
-                        torch.cuda.empty_cache()
-                        initial_memory = torch.cuda.memory_allocated(0) / 1024**3
+                        initial_memory = self._get_current_memory_usage()
                         logger.info(f"🧹 GPU memory before loading: {initial_memory:.2f}GB")
                     
-                    logger.info(f"🔧 Loading with dtype: {torch_dtype}, attention: {attn_implementation}")
+                    logger.info(f"🔧 Memory-optimized loading: dtype={torch_dtype}, flash_attn={attn_implementation is not None}")
+                    
+                    # Check if we have enough memory for model loading
+                    if self.device == "cuda" and not self._check_memory_available(required_mb=2048):  # Model needs ~2GB
+                        logger.warning("⚠️ Insufficient memory for GPU loading, falling back to CPU")
+                        self.device = "cpu"
+                        torch_dtype = torch.float32
+                        attn_implementation = None
                     
                     self.model = ColQwen2.from_pretrained(
                         self.model_name,

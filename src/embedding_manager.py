@@ -356,6 +356,91 @@ class EmbeddingManager:
                 'error': str(e),
                 'file_path': file_path
             }
+    
+    def create_visual_embedding_adaptive(self, file_path: str, query: str = None, cache_key: str = None) -> Dict[str, Any]:
+        """
+        Create visual embeddings using adaptive processing that optimizes memory usage
+        and selects appropriate processing strategy based on content analysis.
+        """
+        if self.embedding_model != "colpali":
+            return {
+                'status': 'error',
+                'error': 'Adaptive visual embeddings are only supported with ColPali model'
+            }
+        
+        if not file_path or not os.path.exists(file_path):
+            return {
+                'status': 'error',
+                'error': f'Invalid file path: {file_path}'
+            }
+        
+        # Generate cache key if not provided
+        if cache_key is None:
+            try:
+                with open(file_path, 'rb') as f:
+                    file_content = f.read()
+                    cache_key = hashlib.md5(file_content).hexdigest()
+            except Exception as e:
+                self.logger.error(f"Failed to generate cache key: {e}")
+                cache_key = hashlib.md5(file_path.encode()).hexdigest()
+        
+        # Check cache first
+        if self.cache_embeddings:
+            cached_result = self._load_visual_from_cache(cache_key)
+            if cached_result is not None:
+                self.stats['cache_hits'] += 1
+                self.logger.info("✅ Using cached adaptive visual embeddings")
+                return cached_result
+        
+        try:
+            # Use adaptive processing from visual document processor
+            if self.visual_processor is None:
+                return {
+                    'status': 'error',
+                    'error': 'VisualDocumentProcessor not initialized for adaptive processing'
+                }
+            
+            self.logger.info(f"🎯 Starting adaptive visual processing for {os.path.basename(file_path)}")
+            result = self.visual_processor.process_file_adaptive(file_path, query)
+            
+            # Handle different processing strategies
+            if result['status'] == 'success':
+                strategy = result.get('strategy', 'unknown')
+                self.logger.info(f"✅ Adaptive processing successful with {strategy} strategy")
+                
+                if strategy == 'text_fallback':
+                    # Text fallback - no visual embeddings generated
+                    self.logger.info("📄 Using text fallback, no visual embeddings generated")
+                    result['embeddings'] = None
+                else:
+                    # Visual or hybrid processing successful
+                    embeddings = result.get('embeddings')
+                    if embeddings is not None:
+                        self.logger.info(f"🧠 Adaptive embeddings generated: {embeddings.shape if hasattr(embeddings, 'shape') else type(embeddings)}")
+            
+            # Cache the result
+            if self.cache_embeddings and result['status'] == 'success':
+                try:
+                    self._save_visual_to_cache(cache_key, result)
+                except Exception as e:
+                    self.logger.warning(f"Failed to cache adaptive visual embedding: {e}")
+            
+            # Update statistics
+            self.stats['embeddings_created'] += 1
+            self.stats['cache_misses'] += 1
+            if result.get('metadata'):
+                page_count = result['metadata'].get('page_count', 0)
+                self.stats['total_tokens_processed'] += page_count * 1024  # Estimate tokens per page
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"❌ Adaptive visual embedding creation failed: {e}")
+            return {
+                'status': 'error',
+                'error': str(e),
+                'file_path': file_path
+            }
 
     def query_visual_embeddings(self, query: str, document_embeddings: Any) -> Any:
         """Query visual embeddings using ColPali."""

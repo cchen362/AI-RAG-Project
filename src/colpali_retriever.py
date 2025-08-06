@@ -202,9 +202,9 @@ class ColPaliRetriever:
                     logger.warning(f"⚠️ Skipping non-PDF file: {filename}")
                     continue
                 
-                # Generate visual embeddings and extract page images
-                logger.info(f"🔄 Calling embedding_manager.create_visual_embedding for {filename}")
-                visual_result = self.embedding_manager.create_visual_embedding(doc_path)
+                # Generate visual embeddings using adaptive processing
+                logger.info(f"🔄 Calling adaptive visual embedding processing for {filename}")
+                visual_result = self.embedding_manager.create_visual_embedding_adaptive(doc_path)
                 
                 logger.info(f"📊 Visual embedding result: status={visual_result.get('status')}, keys={list(visual_result.keys())}")
                 if 'embeddings' in visual_result and visual_result['embeddings'] is not None:

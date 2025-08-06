@@ -40,6 +40,7 @@ from src.rag_system import RAGSystem
 from src.salesforce_connector import SalesforceConnector
 from src.colpali_retriever import ColPaliRetriever
 from src.cross_encoder_reranker import CrossEncoderReRanker
+from src.memory_optimizer import memory_optimizer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

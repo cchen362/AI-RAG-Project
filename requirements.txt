@@ -46,6 +46,7 @@ notebook>=7.2.0
 colpali-engine>=0.3.10       # Latest stable version with transformers 4.50.0+ compatibility
 pdf2image>=1.17.0            # PDF to image conversion
 Pillow>=10.0.0               # Essential for image processing (PIL)
+opencv-python>=4.8.0         # Computer vision for visual complexity analysis
 # Note: pdf2image requires poppler system dependency
 # Windows: conda install -c conda-forge poppler
 # Linux: apt-get install poppler-utils  
