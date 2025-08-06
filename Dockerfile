@@ -141,8 +141,8 @@ ENV DOCKER_PRELOADED_MODELS=true
 ENV RAG_DATA_DIR=/app/data
 ENV RAG_CACHE_DIR=/app/cache
 
-# GPU memory optimization environment variables
-ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512
+# GPU memory optimization environment variables for RTX 1060 6GB
+ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:256,roundup_power2_divisions:8
 
 # Create data and cache directories with proper ownership
 RUN mkdir -p /app/data /app/cache /app/logs && \
@@ -222,8 +222,8 @@ ENV DOCKER_PRELOADED_MODELS=true
 ENV RAG_DATA_DIR=/app/data
 ENV RAG_CACHE_DIR=/app/cache
 
-# GPU memory optimization environment variables
-ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512
+# GPU memory optimization environment variables for RTX 1060 6GB
+ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:256,roundup_power2_divisions:8
 
 # Create data and cache directories with proper ownership
 RUN mkdir -p /app/data /app/cache /app/logs && \

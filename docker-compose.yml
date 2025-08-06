@@ -111,9 +111,10 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - TORCH_CUDA_ARCH_LIST=6.0;6.1;7.0;7.5;8.0;8.6;9.0
       
-      # Memory and performance optimization
-      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+      # Memory and performance optimization for RTX 1060 6GB
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:256,roundup_power2_divisions:8
       - CUDA_LAUNCH_BLOCKING=0
+      - TORCH_CUDA_MEMORY_FRACTION=0.85
     volumes:
       # Persistent data storage
       - ./data:/app/data:rw
