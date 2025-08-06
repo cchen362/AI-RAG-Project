@@ -141,6 +141,9 @@ ENV DOCKER_PRELOADED_MODELS=true
 ENV RAG_DATA_DIR=/app/data
 ENV RAG_CACHE_DIR=/app/cache
 
+# GPU memory optimization environment variables
+ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512
+
 # Create data and cache directories with proper ownership
 RUN mkdir -p /app/data /app/cache /app/logs && \
     chown -R appuser:appuser /app/data /app/cache /app/logs
@@ -218,6 +221,9 @@ ENV STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
 ENV DOCKER_PRELOADED_MODELS=true
 ENV RAG_DATA_DIR=/app/data
 ENV RAG_CACHE_DIR=/app/cache
+
+# GPU memory optimization environment variables
+ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:512
 
 # Create data and cache directories with proper ownership
 RUN mkdir -p /app/data /app/cache /app/logs && \

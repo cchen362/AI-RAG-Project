@@ -637,11 +637,26 @@ class SimpleRAGOrchestrator:
             # Initialize ColPali retriever (production settings with GPU detection)
             import torch
             if torch.cuda.is_available():
-                logger.info("🖼️ Initializing ColPali retriever (GPU detected)...")
+                # Get GPU memory information for dynamic configuration
+                gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                gpu_name = torch.cuda.get_device_name(0)
+                logger.info(f"🖼️ Initializing ColPali retriever (GPU: {gpu_name}, {gpu_memory_gb:.1f}GB)...")
+                
+                # Memory-aware configuration for different GPU sizes
+                if gpu_memory_gb <= 6.5:  # 6GB GPU (like GTX 1060)
+                    max_pages = 20  # Conservative for 6GB
+                    logger.info("🎯 6GB GPU detected - using memory-optimized settings")
+                elif gpu_memory_gb <= 8.5:  # 8GB GPU
+                    max_pages = 30
+                    logger.info("🚀 8GB GPU detected - using balanced settings")
+                else:  # 10GB+ GPU
+                    max_pages = 50
+                    logger.info("⚡ High-memory GPU detected - using maximum settings")
+                
                 colpali_config = {
                     'model_name': 'vidore/colqwen2-v1.0',
                     'device': 'auto',
-                    'max_pages_per_doc': 50,
+                    'max_pages_per_doc': max_pages,
                     'cache_embeddings': True,
                     'cache_dir': 'cache/embeddings'
                 }

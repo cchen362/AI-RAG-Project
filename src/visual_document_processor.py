@@ -51,7 +51,12 @@ class VisualDocumentProcessor:
         if torch.cuda.is_available():
             device = "cuda"
             gpu_name = torch.cuda.get_device_name(0)
-            logger.info(f"🚀 GPU detected: {gpu_name}")
+            gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            logger.info(f"🚀 GPU detected: {gpu_name} ({gpu_memory:.1f}GB VRAM)")
+            
+            # Configure GPU memory optimization for 6GB constraints
+            os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:512'
+            logger.info("🔧 GPU memory optimization configured for 6GB constraints")
         else:
             device = "cpu"
             logger.info("💻 Using CPU (GPU not available)")
@@ -84,6 +89,12 @@ class VisualDocumentProcessor:
                     torch_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
                     attn_implementation = "flash_attention_2" if (self.device == "cuda" and is_flash_attn_2_available()) else None
                     
+                    # GPU memory cleanup before loading
+                    if self.device == "cuda":
+                        torch.cuda.empty_cache()
+                        initial_memory = torch.cuda.memory_allocated(0) / 1024**3
+                        logger.info(f"🧹 GPU memory before loading: {initial_memory:.2f}GB")
+                    
                     logger.info(f"🔧 Loading with dtype: {torch_dtype}, attention: {attn_implementation}")
                     
                     self.model = ColQwen2.from_pretrained(
@@ -99,6 +110,12 @@ class VisualDocumentProcessor:
                         trust_remote_code=True
                     )
                     
+                    # GPU memory status after loading
+                    if self.device == "cuda":
+                        final_memory = torch.cuda.memory_allocated(0) / 1024**3
+                        model_memory = final_memory - initial_memory
+                        logger.info(f"🎮 Model loaded: {model_memory:.2f}GB VRAM used")
+                    
                     logger.info("✅ ColQwen2 models loaded successfully")
                     
                 except Exception as engine_error:
@@ -113,6 +130,12 @@ class VisualDocumentProcessor:
                 torch_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
                 attn_implementation = "flash_attention_2" if (self.device == "cuda" and is_flash_attn_2_available()) else None
                 
+                # GPU memory cleanup before fallback loading
+                if self.device == "cuda":
+                    torch.cuda.empty_cache()
+                    initial_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    logger.info(f"🧹 GPU memory before fallback loading: {initial_memory:.2f}GB")
+                
                 self.model = AutoModel.from_pretrained(
                     self.model_name,
                     torch_dtype=torch_dtype,
@@ -125,6 +148,12 @@ class VisualDocumentProcessor:
                     self.model_name,
                     trust_remote_code=True
                 )
+                
+                # GPU memory status after fallback loading
+                if self.device == "cuda":
+                    final_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    model_memory = final_memory - initial_memory
+                    logger.info(f"🎮 Fallback model loaded: {model_memory:.2f}GB VRAM used")
             
             load_time = time.time() - start_time
             logger.info(f"✅ Model loaded in {load_time:.2f}s")
@@ -346,82 +375,94 @@ class VisualDocumentProcessor:
             
             logger.info(f"✅ Prepared {len(batch_images)} valid images for processing")
             
-            # Process images through ColPali with updated API handling
+            # Process images through ColPali with memory-optimized batch processing
             with torch.no_grad():
                 embeddings = None
                 
-                # Try standard processing first
-                try:
-                    logger.info("🔧 Attempting ColQwen2 process_images API...")
-                    batch_inputs = self.processor.process_images(batch_images)
+                # GPU memory cleanup before processing
+                if self.device == "cuda":
+                    torch.cuda.empty_cache()
+                    pre_process_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    available_memory = (torch.cuda.get_device_properties(0).total_memory / 1024**3) - pre_process_memory
+                    logger.info(f"🧹 GPU memory before processing: {pre_process_memory:.2f}GB, available: {available_memory:.2f}GB")
                     
-                    # Validate batch_inputs
-                    if batch_inputs is None:
-                        raise ValueError("Processor returned None for batch_inputs")
-                    
-                    # BatchFeature is the correct return type from ColQwen2 processor
-                    if not hasattr(batch_inputs, 'keys'):
-                        raise ValueError(f"Expected BatchFeature or dict from processor, got {type(batch_inputs)}")
-                    
-                    logger.info(f"✅ Processor returned: {list(batch_inputs.keys())}")
-                    
-                    # Move to device
-                    for key in batch_inputs:
-                        if isinstance(batch_inputs[key], torch.Tensor):
-                            batch_inputs[key] = batch_inputs[key].to(self.device)
-                    
-                    # Generate embeddings with ColQwen2 model
-                    outputs = self.model(**batch_inputs)
-                    
-                    # Handle ColQwen2 output format
-                    if hasattr(outputs, 'last_hidden_state'):
-                        embeddings = outputs.last_hidden_state
-                    elif isinstance(outputs, tuple):
-                        embeddings = outputs[0]
+                    # Dynamic batch sizing based on available memory
+                    if available_memory < 1.0:  # Less than 1GB available
+                        max_batch_size = 1  # Process one page at a time
+                        logger.info("⚠️ Low memory detected - using single page processing")
+                    elif available_memory < 2.0:  # Less than 2GB available  
+                        max_batch_size = 2  # Process 2 pages at a time
+                        logger.info("🔧 Medium memory - processing 2 pages per batch")
                     else:
-                        embeddings = outputs
+                        max_batch_size = 3  # Process 3 pages at a time (conservative)
+                        logger.info("🚀 Good memory - processing 3 pages per batch")
+                else:
+                    max_batch_size = len(batch_images)  # CPU can handle full batch
+                
+                # Process images in memory-optimized batches
+                all_embeddings = []
+                
+                for i in range(0, len(batch_images), max_batch_size):
+                    batch_subset = batch_images[i:i + max_batch_size]
+                    logger.info(f"🔄 Processing batch {i//max_batch_size + 1}/{(len(batch_images)-1)//max_batch_size + 1} ({len(batch_subset)} pages)")
                     
-                    logger.info("✅ Standard processing succeeded")
+                    # GPU memory cleanup before each batch
+                    if self.device == "cuda":
+                        torch.cuda.empty_cache()
                     
-                except Exception as proc_err:
-                    logger.warning(f"⚠️ Standard processing failed: {proc_err}, trying alternative")
-                    
-                    # Alternative processing approach with better error handling
+                    # Try standard processing first
                     try:
-                        logger.info("🔧 Attempting ColQwen2 process_images fallback...")
-                        batch_inputs = self.processor.process_images(batch_images)
+                        batch_inputs = self.processor.process_images(batch_subset)
                         
-                        # Validate batch_inputs before iterating
+                        # Validate batch_inputs
                         if batch_inputs is None:
-                            raise ValueError("Alternative processor also returned None")
+                            raise ValueError("Processor returned None for batch_inputs")
                         
                         # BatchFeature is the correct return type from ColQwen2 processor
                         if not hasattr(batch_inputs, 'keys'):
-                            raise ValueError(f"Alternative processor returned {type(batch_inputs)}, expected BatchFeature or dict")
+                            raise ValueError(f"Expected BatchFeature or dict from processor, got {type(batch_inputs)}")
                         
-                        logger.info(f"✅ Alternative processor returned: {list(batch_inputs.keys())}")
+                        logger.info(f"✅ Processor returned: {list(batch_inputs.keys())}")
                         
-                        # Safely move to device
+                        # Move to device
                         for key in batch_inputs:
                             if isinstance(batch_inputs[key], torch.Tensor):
                                 batch_inputs[key] = batch_inputs[key].to(self.device)
                         
+                        # Generate embeddings with ColQwen2 model
                         outputs = self.model(**batch_inputs)
+                        
+                        # Handle ColQwen2 output format
                         if hasattr(outputs, 'last_hidden_state'):
-                            embeddings = outputs.last_hidden_state
+                            batch_embeddings = outputs.last_hidden_state
+                        elif isinstance(outputs, tuple):
+                            batch_embeddings = outputs[0]
                         else:
-                            embeddings = outputs
+                            batch_embeddings = outputs
                         
-                        logger.info("✅ Alternative processing succeeded")
+                        # Store batch embeddings
+                        all_embeddings.append(batch_embeddings)
                         
-                    except Exception as alt_err:
-                        logger.error(f"❌ Alternative processing also failed: {alt_err}")
-                        # Try one more fallback approach
-                        try:
-                            logger.info("🔧 Attempting single image processing fallback...")
-                            single_embeddings = []
-                            
-                            for img in batch_images[:3]:  # Limit to prevent overwhelming
+                        # Memory cleanup after batch processing
+                        del batch_inputs, outputs
+                        if self.device == "cuda":
+                            torch.cuda.empty_cache()
+                            current_memory = torch.cuda.memory_allocated(0) / 1024**3
+                            logger.info(f"🧹 Memory after batch {i//max_batch_size + 1}: {current_memory:.2f}GB")
+                        
+                        logger.info(f"✅ Batch {i//max_batch_size + 1} processing succeeded")
+                    
+                    except Exception as proc_err:
+                        logger.warning(f"⚠️ Batch {i//max_batch_size + 1} failed: {proc_err}, trying single image fallback")
+                        
+                        # Fallback to single image processing for this batch
+                        batch_embeddings_list = []
+                        for img_idx, img in enumerate(batch_subset):
+                            try:
+                                # GPU memory cleanup before each image
+                                if self.device == "cuda":
+                                    torch.cuda.empty_cache()
+                                
                                 single_input = self.processor.process_images([img])
                                 if single_input is not None and hasattr(single_input, 'keys'):
                                     for key in single_input:
@@ -430,19 +471,33 @@ class VisualDocumentProcessor:
                                     
                                     single_output = self.model(**single_input)
                                     if hasattr(single_output, 'last_hidden_state'):
-                                        single_embeddings.append(single_output.last_hidden_state)
+                                        batch_embeddings_list.append(single_output.last_hidden_state)
                                     else:
-                                        single_embeddings.append(single_output)
-                            
-                            if single_embeddings:
-                                embeddings = torch.cat(single_embeddings, dim=0)
-                                logger.info("✅ Single image processing fallback succeeded")
-                            else:
-                                raise ValueError("All processing approaches failed")
+                                        batch_embeddings_list.append(single_output)
+                                    
+                                    # Clean up after each image
+                                    del single_input, single_output
+                                    if self.device == "cuda":
+                                        torch.cuda.empty_cache()
                                 
-                        except Exception as final_err:
-                            logger.error(f"❌ Final fallback also failed: {final_err}")
-                            raise
+                            except Exception as img_err:
+                                logger.error(f"❌ Image {img_idx} in batch {i//max_batch_size + 1} failed: {img_err}")
+                                continue
+                        
+                        if batch_embeddings_list:
+                            batch_embeddings = torch.cat(batch_embeddings_list, dim=0)
+                            all_embeddings.append(batch_embeddings)
+                            logger.info(f"✅ Single image fallback succeeded for batch {i//max_batch_size + 1}")
+                        else:
+                            logger.error(f"❌ All images failed in batch {i//max_batch_size + 1}")
+                            raise RuntimeError(f"Batch {i//max_batch_size + 1} completely failed")
+                
+                # Combine all batch embeddings
+                if all_embeddings:
+                    embeddings = torch.cat(all_embeddings, dim=0)
+                    logger.info(f"✅ Combined {len(all_embeddings)} batches into final embeddings")
+                else:
+                    raise ValueError("No embeddings generated from any batch")
                 
                 # Validate final embeddings
                 if embeddings is None:
@@ -453,6 +508,13 @@ class VisualDocumentProcessor:
                 
                 logger.info(f"✅ Generated embeddings shape: {embeddings.shape}")
                 logger.info(f"✅ Embeddings dtype: {embeddings.dtype}, device: {embeddings.device}")
+                
+                # Final GPU memory cleanup after processing
+                if self.device == "cuda":
+                    torch.cuda.empty_cache()
+                    final_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    logger.info(f"🧹 GPU memory after processing: {final_memory:.2f}GB")
+                
                 return embeddings
             
         except Exception as e:
@@ -479,9 +541,15 @@ class VisualDocumentProcessor:
         try:
             self._load_model()
             
-            # Process query text with ColQwen2 API
+            # Process query text with ColQwen2 API and memory optimization
             with torch.no_grad():
                 query_embedding = None
+                
+                # GPU memory cleanup before query processing
+                if self.device == "cuda":
+                    torch.cuda.empty_cache()
+                    pre_query_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    logger.info(f"🧹 GPU memory before query: {pre_query_memory:.2f}GB")
                 
                 try:
                     # Use ColQwen2 specific query processing API
@@ -511,6 +579,11 @@ class VisualDocumentProcessor:
                         query_embedding = query_outputs[0]
                     else:
                         query_embedding = query_outputs
+                    
+                    # Clean up query processing tensors
+                    del query_inputs, query_outputs
+                    if self.device == "cuda":
+                        torch.cuda.empty_cache()
                     
                     logger.info("✅ Standard query processing succeeded")
                         
@@ -556,6 +629,12 @@ class VisualDocumentProcessor:
                 
                 # Calculate MaxSim scores
                 scores = self._calculate_maxsim_scores(query_embedding, document_embeddings)
+                
+                # GPU memory cleanup after query processing
+                if self.device == "cuda":
+                    torch.cuda.empty_cache()
+                    post_query_memory = torch.cuda.memory_allocated(0) / 1024**3
+                    logger.info(f"🧹 GPU memory after query: {post_query_memory:.2f}GB")
             
             return scores
             
