@@ -16,7 +16,7 @@ except ImportError:
 
 class SalesforceConnector:
     def __init__(self):
-        load_dotenv()
+        load_dotenv("/app/.env", override=True)  # Override baked-in container values
         self.username = os.getenv('SALESFORCE_USERNAME')
         self.password = os.getenv('SALESFORCE_PASSWORD')
         self.security_token = os.getenv('SALESFORCE_SECURITY_TOKEN')

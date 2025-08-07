@@ -147,8 +147,15 @@ class VisualDocumentProcessor:
     
     def analyze_visual_complexity(self, image: Image.Image) -> Dict[str, Any]:
         """
-        Analyze visual complexity of a page to determine processing needs.
-        Returns analysis with visual_score and processing recommendations.
+        Comprehensive document-aware visual complexity analysis.
+        
+        Detects and scores multiple types of visual content:
+        - Charts & graphs (bar, line, pie, scatter)
+        - Diagrams & flowcharts
+        - Tables & structured data
+        - Technical figures & illustrations
+        - Architectural drawings
+        - Mixed visual-text layouts
         """
         try:
             # Convert PIL to numpy array for analysis
@@ -160,60 +167,67 @@ class VisualDocumentProcessor:
             else:
                 gray = img_array
             
-            # 1. Color variance analysis (high variance = complex visuals)
-            variance_score = np.var(gray) / 10000.0  # Normalize to 0-1 range
+            # Multi-level edge detection for different visual elements
+            edges_fine = cv2.Canny(gray, 30, 90)     # Fine details (text, thin lines)
+            edges_medium = cv2.Canny(gray, 60, 180)  # Medium structures (chart elements)
+            edges_coarse = cv2.Canny(gray, 100, 300) # Major boundaries (figures, diagrams)
             
-            # 2. Edge density analysis (charts/diagrams have many edges)
-            edges = cv2.Canny(gray, 50, 150)
-            edge_density = np.sum(edges > 0) / (edges.shape[0] * edges.shape[1])
+            # Comprehensive visual content detection
+            visual_features = self._detect_visual_document_features(gray, edges_fine, edges_medium, edges_coarse)
             
-            # 3. Contour analysis (detect non-text elements)
-            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # Calculate component scores
+            structure_score = visual_features['structured_content_score']  # Tables, charts, diagrams
+            layout_score = visual_features['complex_layout_score']        # Multi-column, mixed content
+            graphic_score = visual_features['graphic_elements_score']     # Figures, illustrations
+            text_density_penalty = visual_features['text_density_penalty'] # Pure text gets penalty
             
-            # Filter out small contours (likely text)
-            significant_contours = [c for c in contours if cv2.contourArea(c) > 500]
-            contour_score = len(significant_contours) / 100.0  # Normalize
+            # Weighted combination for overall visual complexity
+            visual_score = min(1.0, max(0.0, 
+                structure_score * 0.4 +    # Structured content most important
+                graphic_score * 0.3 +      # Graphics/diagrams
+                layout_score * 0.2 +       # Complex layouts
+                (1.0 - text_density_penalty) * 0.1  # Reduce score for text-heavy pages
+            ))
             
-            # 4. Layout analysis using image statistics
-            # High standard deviation in pixel values suggests varied content
-            img_stats = ImageStat.Stat(image)
-            if hasattr(img_stats, 'stddev'):
-                layout_complexity = np.mean(img_stats.stddev) / 128.0
-            else:
-                layout_complexity = 0.3  # Default moderate complexity
+            # Document type classification with holistic approach
+            doc_type = visual_features['primary_document_type']
+            confidence = visual_features['confidence_score']
             
-            # Combine scores (weighted)
-            visual_score = (
-                variance_score * 0.3 +
-                edge_density * 0.3 +
-                contour_score * 0.2 +
-                layout_complexity * 0.2
-            )
-            
-            # Normalize to 0-1 range
-            visual_score = min(1.0, max(0.0, visual_score))
-            
-            # Classification
-            if visual_score > 0.6:
+            # Intelligent processing decision based on document type AND complexity
+            if doc_type in ['chart', 'diagram', 'figure', 'table'] and confidence > 0.6:
                 complexity_level = "high"
                 recommendation = "visual_processing"
-            elif visual_score > 0.3:
-                complexity_level = "medium" 
-                recommendation = "hybrid_processing"
+                reason = f"Visual document type: {doc_type} (confidence: {confidence:.2f})"
+            elif visual_score > 0.35:  # Reasonable threshold for mixed content
+                complexity_level = "high" 
+                recommendation = "visual_processing"
+                reason = f"High visual complexity: {visual_score:.2f}"
+            elif visual_score > 0.15 or doc_type in ['mixed_layout', 'technical']:
+                complexity_level = "medium"
+                recommendation = "hybrid_processing" 
+                reason = f"Medium complexity or technical content: {visual_score:.2f}"
             else:
                 complexity_level = "low"
                 recommendation = "text_processing"
+                reason = f"Text-dominant content: {visual_score:.2f}"
+            
+            # Extract key metrics for compatibility
+            metrics = visual_features.get('detailed_metrics', {})
             
             return {
                 'visual_score': visual_score,
                 'complexity_level': complexity_level,
                 'recommendation': recommendation,
                 'metrics': {
-                    'variance_score': variance_score,
-                    'edge_density': edge_density,
-                    'contour_count': len(significant_contours),
-                    'layout_complexity': layout_complexity
-                }
+                    'structure_score': structure_score,
+                    'graphic_score': graphic_score,
+                    'layout_score': layout_score,
+                    'text_density_penalty': text_density_penalty,
+                    'document_type': doc_type,
+                    'confidence': confidence,
+                    **metrics
+                },
+                'reason': reason
             }
             
         except Exception as e:
@@ -223,8 +237,314 @@ class VisualDocumentProcessor:
                 'visual_score': 0.5,
                 'complexity_level': "medium",
                 'recommendation': "hybrid_processing",
-                'metrics': {}
+                'metrics': {},
+                'reason': "Analysis failed, using defaults"
             }
+    
+    def _detect_visual_document_features(self, gray, edges_fine, edges_medium, edges_coarse):
+        """
+        Comprehensive feature detection for all types of visual documents.
+        
+        This is the core method that holistically analyzes visual content including:
+        - Charts & graphs (bar, line, pie, scatter, timing)
+        - Diagrams & flowcharts (technical, architectural)
+        - Tables & structured data (complex layouts)
+        - Technical figures & illustrations
+        - Mixed visual-text layouts
+        """
+        height, width = gray.shape
+        total_pixels = height * width
+        
+        # Initialize detection results
+        features = {
+            'chart_indicators': 0,
+            'diagram_indicators': 0, 
+            'table_indicators': 0,
+            'figure_indicators': 0,
+            'text_indicators': 0,
+            'layout_indicators': 0
+        }
+        
+        try:
+            # === CHART DETECTION ===
+            # Bar charts: Look for rectangular patterns with consistent spacing
+            contours_medium, _ = cv2.findContours(edges_medium, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            rectangles = []
+            for contour in contours_medium:
+                if cv2.contourArea(contour) > 500:  # Significant size
+                    approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
+                    if len(approx) == 4:  # Rectangle-like
+                        rectangles.append(contour)
+            
+            # Multiple aligned rectangles = bar chart indicator
+            if len(rectangles) >= 3:
+                features['chart_indicators'] += 0.4
+            
+            # Line charts: Look for continuous lines with data points
+            lines = cv2.HoughLinesP(edges_medium, 1, np.pi/180, threshold=50, minLineLength=100, maxLineGap=10)
+            if lines is not None and len(lines) > 5:
+                # Check for axis-like patterns (horizontal + vertical lines)
+                horizontal_lines = sum(1 for line in lines if abs(line[0][1] - line[0][3]) < 10)
+                vertical_lines = sum(1 for line in lines if abs(line[0][0] - line[0][2]) < 10)
+                
+                if horizontal_lines >= 2 and vertical_lines >= 1:
+                    features['chart_indicators'] += 0.5  # Strong axis indicator
+            
+            # Timing/performance charts: Look for grid patterns and axis labels area
+            # Enhanced detection for timing charts like in the user's example
+            grid_score = self._detect_grid_patterns(edges_fine, edges_medium)
+            if grid_score > 0.3:
+                features['chart_indicators'] += 0.6  # Strong grid = likely chart
+            
+            # === DIAGRAM DETECTION ===
+            # Flowcharts: Connected shapes with arrows/lines
+            shapes = []
+            for contour in contours_medium:
+                area = cv2.contourArea(contour)
+                if area > 200:
+                    # Analyze shape characteristics
+                    perimeter = cv2.arcLength(contour, True)
+                    circularity = 4 * np.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
+                    
+                    if 0.3 < circularity < 0.9:  # Various shaped elements
+                        shapes.append(contour)
+            
+            if len(shapes) >= 3:
+                # Check for connecting lines between shapes
+                connection_score = self._detect_connections(gray, shapes)
+                features['diagram_indicators'] += connection_score
+            
+            # === TABLE DETECTION ===
+            # Tables: Regular grid patterns with consistent spacing
+            horizontal_lines = cv2.HoughLinesP(edges_medium, 1, np.pi/180, threshold=30, minLineLength=width//4)
+            vertical_lines = cv2.HoughLinesP(edges_medium, 1, np.pi/2, threshold=30, minLineLength=height//4)
+            
+            if horizontal_lines is not None and vertical_lines is not None:
+                h_count = len(horizontal_lines)
+                v_count = len(vertical_lines)
+                
+                # Strong table indicators
+                if h_count >= 3 and v_count >= 2:
+                    features['table_indicators'] += 0.7
+                elif h_count >= 2 and v_count >= 3:
+                    features['table_indicators'] += 0.7
+            
+            # === FIGURE/ILLUSTRATION DETECTION ===
+            # Complex contours, irregular shapes, artistic elements
+            complex_contours = [c for c in contours_medium if cv2.contourArea(c) > 1000]
+            if len(complex_contours) > 0:
+                complexity_avg = np.mean([len(cv2.approxPolyDP(c, 0.02*cv2.arcLength(c, True), True)) 
+                                        for c in complex_contours[:5]])  # Limit to top 5
+                if complexity_avg > 8:  # Complex shapes
+                    features['figure_indicators'] += 0.5
+            
+            # === TEXT DENSITY ANALYSIS ===
+            # OCR-like analysis for text regions
+            text_regions = self._detect_text_regions(edges_fine)
+            text_coverage = sum(cv2.contourArea(region) for region in text_regions) / total_pixels
+            features['text_indicators'] = text_coverage
+            
+            # === LAYOUT COMPLEXITY ===
+            # Multi-column, mixed content patterns
+            layout_complexity = self._analyze_layout_complexity(edges_coarse, width, height)
+            features['layout_indicators'] = layout_complexity
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Feature detection error: {e}")
+        
+        # === HOLISTIC DOCUMENT TYPE CLASSIFICATION ===
+        max_score = 0
+        primary_type = 'text'
+        confidence = 0
+        
+        type_scores = {
+            'chart': features['chart_indicators'],
+            'diagram': features['diagram_indicators'],
+            'table': features['table_indicators'], 
+            'figure': features['figure_indicators'],
+            'mixed_layout': features['layout_indicators'],
+            'text': features['text_indicators']
+        }
+        
+        # Find dominant document type
+        for doc_type, score in type_scores.items():
+            if score > max_score:
+                max_score = score
+                primary_type = doc_type
+                confidence = score
+        
+        # Technical document detection (combination of multiple visual elements)
+        if (features['chart_indicators'] > 0.3 or 
+            features['diagram_indicators'] > 0.3 or 
+            features['table_indicators'] > 0.3) and features['text_indicators'] > 0.2:
+            if primary_type == 'text':
+                primary_type = 'technical'
+                confidence = 0.6
+        
+        # === SCORING CALCULATION ===
+        # Structured content (charts, diagrams, tables)
+        structured_content_score = max(features['chart_indicators'], 
+                                     features['diagram_indicators'], 
+                                     features['table_indicators'])
+        
+        # Graphic elements (figures, illustrations)
+        graphic_elements_score = features['figure_indicators']
+        
+        # Complex layouts (multi-column, mixed)
+        complex_layout_score = features['layout_indicators']
+        
+        # Text density penalty (pure text documents get lower visual scores)
+        text_density_penalty = min(1.0, features['text_indicators'] * 2.0)  # Cap at 1.0
+        
+        return {
+            'structured_content_score': structured_content_score,
+            'graphic_elements_score': graphic_elements_score,
+            'complex_layout_score': complex_layout_score,
+            'text_density_penalty': text_density_penalty,
+            'primary_document_type': primary_type,
+            'confidence_score': confidence,
+            'detailed_metrics': {
+                'chart_score': features['chart_indicators'],
+                'diagram_score': features['diagram_indicators'],
+                'table_score': features['table_indicators'],
+                'figure_score': features['figure_indicators'],
+                'text_coverage': features['text_indicators'],
+                'layout_complexity': features['layout_indicators'],
+                'type_scores': type_scores
+            }
+        }
+    
+    def _detect_grid_patterns(self, edges_fine, edges_medium):
+        """Detect grid patterns typical in charts and performance diagrams."""
+        try:
+            # Combine fine and medium edges for grid detection
+            combined_edges = cv2.bitwise_or(edges_fine, edges_medium)
+            
+            # Look for regular spacing patterns
+            horizontal_projection = np.sum(combined_edges, axis=1)
+            vertical_projection = np.sum(combined_edges, axis=0)
+            
+            # Find peaks (lines) in projections
+            h_peaks = self._find_projection_peaks(horizontal_projection)
+            v_peaks = self._find_projection_peaks(vertical_projection)
+            
+            # Grid score based on regularity of line spacing
+            grid_score = 0
+            if len(h_peaks) >= 3:  # At least 3 horizontal lines
+                h_spacing = np.diff(h_peaks)
+                if len(h_spacing) > 1:
+                    h_regularity = 1.0 - (np.std(h_spacing) / np.mean(h_spacing)) if np.mean(h_spacing) > 0 else 0
+                    grid_score += h_regularity * 0.5
+            
+            if len(v_peaks) >= 2:  # At least 2 vertical lines (y-axis + data)
+                v_spacing = np.diff(v_peaks) 
+                if len(v_spacing) > 1:
+                    v_regularity = 1.0 - (np.std(v_spacing) / np.mean(v_spacing)) if np.mean(v_spacing) > 0 else 0
+                    grid_score += v_regularity * 0.5
+                else:
+                    grid_score += 0.3  # Still some structure
+            
+            return min(1.0, grid_score)
+            
+        except Exception as e:
+            logger.warning(f"Grid detection error: {e}")
+            return 0.0
+    
+    def _find_projection_peaks(self, projection, min_prominence=0.1):
+        """Find peaks in projection representing grid lines."""
+        if len(projection) == 0:
+            return []
+        
+        threshold = np.max(projection) * min_prominence
+        peaks = []
+        
+        for i in range(1, len(projection) - 1):
+            if (projection[i] > projection[i-1] and 
+                projection[i] > projection[i+1] and 
+                projection[i] > threshold):
+                peaks.append(i)
+        
+        return peaks
+    
+    def _detect_connections(self, gray, shapes):
+        """Detect connecting lines between shapes (for flowchart detection)."""
+        try:
+            # Create mask for shapes
+            shape_mask = np.zeros_like(gray)
+            for shape in shapes:
+                cv2.fillPoly(shape_mask, [shape], 255)
+            
+            # Subtract shapes from image to isolate connecting lines
+            connections = cv2.bitwise_and(gray, cv2.bitwise_not(shape_mask))
+            
+            # Look for lines in the connections
+            edges = cv2.Canny(connections, 50, 150)
+            lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=20, minLineLength=30)
+            
+            if lines is not None:
+                # Score based on number of connecting lines relative to shapes
+                connection_ratio = len(lines) / max(1, len(shapes))
+                return min(0.8, connection_ratio * 0.3)  # Cap at 0.8
+            
+            return 0.0
+            
+        except Exception as e:
+            logger.warning(f"Connection detection error: {e}")
+            return 0.0
+    
+    def _detect_text_regions(self, edges_fine):
+        """Detect text regions for density analysis."""
+        try:
+            # Find contours that look like text
+            contours, _ = cv2.findContours(edges_fine, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            text_regions = []
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                if 50 < area < 5000:  # Text-like size range
+                    # Check aspect ratio
+                    x, y, w, h = cv2.boundingRect(contour)
+                    aspect_ratio = w / h if h > 0 else 0
+                    
+                    # Text typically has certain aspect ratios
+                    if 0.1 < aspect_ratio < 10:  # Reasonable text ratios
+                        text_regions.append(contour)
+            
+            return text_regions
+            
+        except Exception as e:
+            logger.warning(f"Text region detection error: {e}")
+            return []
+    
+    def _analyze_layout_complexity(self, edges_coarse, width, height):
+        """Analyze layout complexity for multi-column or mixed content."""
+        try:
+            # Divide image into regions and analyze content distribution
+            regions = [
+                edges_coarse[:height//2, :width//2],    # Top-left
+                edges_coarse[:height//2, width//2:],     # Top-right  
+                edges_coarse[height//2:, :width//2],     # Bottom-left
+                edges_coarse[height//2:, width//2:]      # Bottom-right
+            ]
+            
+            # Calculate content density in each region
+            densities = [np.sum(region) / (region.shape[0] * region.shape[1]) for region in regions]
+            
+            # Layout complexity based on content distribution
+            if len(densities) > 0:
+                density_std = np.std(densities)
+                density_mean = np.mean(densities)
+                
+                if density_mean > 0:
+                    # Higher variation = more complex layout
+                    complexity = density_std / density_mean
+                    return min(1.0, complexity)
+            
+            return 0.0
+            
+        except Exception as e:
+            logger.warning(f"Layout analysis error: {e}")
+            return 0.0
     
     def analyze_query_intent(self, query: str) -> Dict[str, Any]:
         """Analyze query to determine if visual processing is beneficial."""

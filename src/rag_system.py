@@ -28,7 +28,7 @@ import openai
 from dotenv import load_dotenv
 
 # Load environment variables for API keys
-load_dotenv()
+load_dotenv("/app/.env", override=True)  # Override baked-in container values
 
 # Fix OpenMP library conflicts
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
